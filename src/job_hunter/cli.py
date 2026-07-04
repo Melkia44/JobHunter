@@ -101,6 +101,10 @@ def run(
                 from job_hunter.collectors import france_travail_collector
 
                 all_jobs.extend(france_travail_collector.collect(get_settings()))
+            elif src == "apec":
+                from job_hunter.collectors import apec_rss_collector
+
+                all_jobs.extend(apec_rss_collector.collect(get_settings()))
             else:
                 logger.warning(f"{src} : collecteur pas encore implémenté (Phase 2 en cours)")
         except Exception as exc:  # noqa: BLE001 — une source qui casse ne bloque pas les autres
