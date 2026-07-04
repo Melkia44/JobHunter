@@ -13,12 +13,13 @@ def _word_match(needle: str, haystack: str) -> bool:
     return re.search(rf"(?<![a-z0-9]){re.escape(needle)}(?![a-z0-9])", haystack) is not None
 
 
-def score_tier(company: str, employers: list[Employer]) -> tuple[float, int | None]:
-    """Retourne (score, tier) — tier None si hors-liste. Premier match gagne
-    (l'ordre du YAML fait autorité, ex. Sopra Banking avant Sopra Steria)."""
+def find_employer(company: str, employers: list[Employer]) -> Employer | None:
+    """Employeur cible correspondant à un nom de société, ou None. Premier match
+    gagne (l'ordre du YAML fait autorité, ex. Sopra Banking avant Sopra Steria).
+    Réutilisé par sheet_writer pour la mise à jour des statuts."""
     company_norm = normalize(company)
     if not company_norm:
-        return OUT_OF_LIST_SCORE, None
+        return None
     for emp in employers:
         candidates = [normalize(emp.name), *(normalize(a) for a in emp.aliases)]
         if any(
@@ -26,5 +27,13 @@ def score_tier(company: str, employers: list[Employer]) -> tuple[float, int | No
             for c in candidates
             if c
         ):
-            return _TIER_SCORES[emp.tier], emp.tier
-    return OUT_OF_LIST_SCORE, None
+            return emp
+    return None
+
+
+def score_tier(company: str, employers: list[Employer]) -> tuple[float, int | None]:
+    """Retourne (score, tier) — tier None si hors-liste."""
+    emp = find_employer(company, employers)
+    if emp is None:
+        return OUT_OF_LIST_SCORE, None
+    return _TIER_SCORES[emp.tier], emp.tier

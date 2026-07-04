@@ -1,0 +1,55 @@
+name: Daily Job Hunt
+
+on:
+  schedule:
+    - cron: '30 8 * * *'  # 09:30 Paris (hiver) / 10:30 (été) — horaire flottant assumé
+  workflow_dispatch:
+
+concurrency:
+  group: daily-run
+  cancel-in-progress: false
+
+permissions:
+  contents: write  # commit de data/seen_jobs.db
+
+jobs:
+  hunt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv (Python 3.13)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.13'  # aligné sur .python-version (acté 04/07/2026)
+
+      - name: Install deps
+        run: uv sync --frozen
+
+      - name: Write service account JSON
+        env:
+          SA_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          mkdir -p secrets
+          printf '%s' "$SA_JSON" > secrets/service_account.json
+
+      # Jamais de LinkedIn ici : IP cloud = ban (local uniquement via run_locally.sh)
+      - name: Run job hunter
+        shell: bash  # active pipefail : un échec du run n'est pas masqué par tee
+        env:
+          FRANCE_TRAVAIL_CLIENT_ID: ${{ secrets.FRANCE_TRAVAIL_CLIENT_ID }}
+          FRANCE_TRAVAIL_CLIENT_SECRET: ${{ secrets.FRANCE_TRAVAIL_CLIENT_SECRET }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+        run: |
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          uv run job-hunter run 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit updated dedup DB
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/seen_jobs.db
+          git diff --cached --quiet || git commit -m "chore(dedup): update seen_jobs.db [skip ci]"
+          git push

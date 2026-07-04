@@ -1,6 +1,9 @@
-"""Point d'entrée CLI. Pipeline : collecte → dédup → enrichissement → scoring → rapport.
-(Écriture Sheet : Phase 4 — le marquage 'vu' des nouveautés passera alors APRÈS
-l'écriture réussie, pour ne jamais perdre d'offre sur un crash.)"""
+"""Point d'entrée CLI. Pipeline : collecte → dédup → enrichissement → scoring → Sheet → rapport.
+
+Ordre de marquage (acté) : les offres NOUVELLES ne sont marquées 'vues' qu'après
+écriture Sheet réussie — un crash d'écriture ne perd jamais d'offre. Le last_seen
+des offres déjà connues est mis à jour sans condition (inoffensif).
+"""
 import json
 import sys
 from datetime import date
@@ -60,7 +63,7 @@ def main(
 
 @app.command()
 def setup() -> None:
-    """Affiche la config lue, initialise la DB dédup. (Validation auth SA : Phase 4)"""
+    """Affiche la config, initialise la DB dédup, valide l'auth Google Sheets."""
     from job_hunter.dedup import SeenJobsDB
 
     s = get_settings()
@@ -78,7 +81,14 @@ def setup() -> None:
     )
     SeenJobsDB(s.db_path).close()
     logger.info(f"DB dédup prête           = {s.db_path}")
-    logger.warning("Validation auth SA : not implemented yet (Phase 4)")
+    try:
+        from job_hunter.sheet_writer import SheetWriter  # import paresseux (googleapiclient)
+
+        title = SheetWriter(s).check_access()
+        logger.info(f"Auth Google Sheets OK — classeur : « {title} »")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"Auth Google Sheets NON validée : {exc}")
+        logger.warning("Rappel : le Sheet doit être partagé en Éditeur avec l'email du SA (sinon 403)")
 
 
 @app.command()
@@ -98,15 +108,18 @@ def run(
         None, "--min-score", help="Override du seuil (défaut : config, 65)"
     ),
 ) -> None:
-    """Run complet : collecte → dédup → scoring → rapport. (Sheet : Phase 4)"""
+    """Run complet : collecte → dédup → scoring → Sheet → rapport."""
     from job_hunter.collectors.careers_sites_collector import enrich_descriptions, load_employers
     from job_hunter.dedup import SeenJobsDB
     from job_hunter.normalizer import compute_fingerprint
+    from job_hunter.reporter import report
     from job_hunter.scoring import aggregator
+    from job_hunter.scoring.tier import find_employer
     from job_hunter.scoring.title_match import load_target_titles
 
     s = get_settings()
     threshold = min_score if min_score is not None else s.min_score
+    alerts: list[str] = []
 
     selected = list(sources) if sources else list(base.SOURCES)
     for src in selected:
@@ -136,68 +149,66 @@ def run(
                 all_jobs.extend(careers_sites_collector.collect(s))
         except Exception as exc:  # noqa: BLE001 — une source qui casse ne bloque pas les autres
             logger.error(f"{src} : collecte échouée — {exc}")
+            alerts.append(f"{src} : collecte échouée — {exc}")
 
-    # --- Dédup (dry-run : lecture seule, on ne « brûle » pas les nouveautés) ---
+    # --- Dédup (les nouveautés ne sont PAS encore marquées : cf. docstring) ---
     db = SeenJobsDB(s.db_path)
     today = date.today()
-    new_jobs: list[RawJob] = []
+    new_jobs: list[tuple[str, RawJob]] = []  # (fingerprint, job)
     dups = 0
     for job in all_jobs:
         fp = compute_fingerprint(job.company, job.title)
         if db.is_new(fp):
-            new_jobs.append(job)
+            new_jobs.append((fp, job))
         else:
             dups += 1
-        if not dry_run:
-            db.mark_seen(fp, job, today)
-    db.close()
+            if not dry_run:
+                db.mark_seen(fp, job, today)  # last_seen only, inoffensif
 
     if _VERBOSE:
-        _dump_raw_samples(new_jobs)
+        _dump_raw_samples([j for _, j in new_jobs])
 
     # --- Enrichissement : description des offres careers nouvelles ---
-    to_enrich = [j for j in new_jobs if j.source == "careers_site" and not j.description]
+    to_enrich = [j for _, j in new_jobs if j.source == "careers_site" and not j.description]
     if to_enrich:
         enrich_descriptions(to_enrich)
 
     # --- Scoring ---
     employers = load_employers(s.employers_yaml)
     targets = load_target_titles(s.target_titles_yaml)
-    new_scored = [aggregator.score_job(j, employers, targets) for j in new_jobs]
+    new_scored = [aggregator.score_job(j, employers, targets) for _, j in new_jobs]
     retained = [
         sj for sj in new_scored if aggregator.passes_threshold(sj, threshold, s.min_score_tier1)
     ]
     retained.sort(key=lambda sj: sj.score, reverse=True)
 
-    _report(len(all_jobs), dups, new_scored, retained, threshold, s.min_score_tier1, dry_run)
+    # --- Écriture Sheet puis marquage des nouveautés ---
+    appended: int | None = None
+    if not dry_run:
+        wrote_ok = False
+        try:
+            from job_hunter.sheet_writer import SheetWriter  # import paresseux
 
+            writer = SheetWriter(s)
+            appended = writer.append_offers(retained, today)
+            touched = {
+                emp.name
+                for sj in retained
+                if sj.matched_employer_tier
+                and (emp := find_employer(sj.job.company, employers)) is not None
+            }
+            writer.update_employer_statuses(touched, employers, today)
+            writer.recompute_pilotage()
+            wrote_ok = True
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"Écriture Sheet échouée — {exc}")
+            alerts.append(f"Sheet non mis à jour — {exc} (nouveautés NON marquées, re-tentées demain)")
+        if wrote_ok:
+            for fp, job in new_jobs:
+                db.mark_seen(fp, job, today)
+    db.close()
 
-def _report(
-    total: int,
-    dups: int,
-    new_scored: list[ScoredJob],
-    retained: list[ScoredJob],
-    threshold: int,
-    threshold_t1: int,
-    dry_run: bool,
-) -> None:
-    logger.info(
-        f"{total} collectées · {dups} déjà vues · {len(new_scored)} nouvelles · "
-        f"{len(retained)} retenues (seuil {threshold}, tier-1 {threshold_t1})"
-    )
-    for sj in retained[:5]:
-        b = sj.breakdown
-        print(
-            f"\n[{sj.score:5.1f}] {sj.job.title} — {sj.job.company} ({sj.job.location or 'lieu n.c.'})\n"
-            f"        hard {b.hard_skills:.0f} · titre {b.title_match:.0f} · soft {b.soft_skills:.0f}"
-            f" · loc {b.location:.0f} · tier {b.tier:.0f} → {sj.match_reason}\n"
-            f"        {sj.job.url}"
-        )
-    if len(retained) > 5:
-        logger.info(f"… et {len(retained) - 5} autres retenues")
-    if dry_run:
-        logger.info("dry-run : DB dédup non modifiée")
-    logger.warning("Écriture Sheet : Phase 4")
+    report(len(all_jobs), dups, len(new_scored), retained, threshold, s.min_score_tier1, appended, dry_run, alerts)
 
 
 def _dump_raw_samples(jobs: list[RawJob], n: int = 3) -> None:
