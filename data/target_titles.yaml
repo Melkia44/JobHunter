@@ -1,7 +1,14 @@
-# Titres de postes cibles pour le sous-score title_match — rempli en Phase 3.
-#
-# Format :
-# titles:
-#   - "service delivery manager"
-#   - "chef de projet"
-titles: []
+# Titres cibles pour le sous-score title_match (normalisés à la lecture :
+# casse/accents/H-F sans importance). Substring → 100, sinon fuzzy difflib.
+# "chef de projet" couvre les variantes informatique/digital/MOE par substring.
+titles:
+  - "service delivery manager"
+  - "delivery manager"
+  - "sdm"
+  - "chef de projet"
+  - "responsable operations services"
+  - "operations services"
+  - "pmo"
+  - "product manager"
+  - "product owner"
+  - "data engineer"

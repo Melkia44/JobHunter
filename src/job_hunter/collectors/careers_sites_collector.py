@@ -166,3 +166,40 @@ def _city_after_france(text: str) -> str | None:
 SCRAPERS: dict[str, Callable[[httpx.Client, Employer], list[RawJob]]] = {
     "careers.manitou-group.com": _scrape_manitou,
 }
+
+
+# --- Enrichissement post-dédup ----------------------------------------------
+
+
+def enrich_descriptions(jobs: list[RawJob]) -> None:
+    """Fetch la page détail des offres careers NOUVELLES sans description, pour que
+    hard/soft skills scorent sur du vrai texte (sans ça, une P1 pertinente plafonne
+    à ~46). Appelé post-dédup : quelques requêtes/jour, pas tout le listing.
+    Échec = on continue avec le titre seul, jamais bloquant."""
+    fetchers: dict[str, Callable[[httpx.Client, str], str | None]] = {
+        "careers.manitou-group.com": _fetch_manitou_description,
+    }
+    enriched = 0
+    with httpx.Client(timeout=TIMEOUT_S, headers=HEADERS, follow_redirects=True) as client:
+        for job in jobs:
+            fetch = fetchers.get(urlparse(job.url).netloc)
+            if fetch is None:
+                continue
+            try:
+                job.description = fetch(client, job.url)
+                enriched += job.description is not None
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(f"careers_site : description non récupérée ({job.url}) — {exc}")
+            time.sleep(RATE_LIMIT_S)
+    if jobs:
+        logger.info(f"careers_site : {enriched}/{len(jobs)} descriptions enrichies")
+
+
+def _fetch_manitou_description(client: httpx.Client, url: str) -> str | None:
+    resp = client.get(url)
+    resp.raise_for_status()
+    tree = HTMLParser(resp.text)
+    node = tree.css_first("main") or tree.css_first("article") or tree.body
+    # Texte brut du contenu principal : suffisant pour du scoring par regex,
+    # le bruit résiduel (nav/cookies) est marginal et borné.
+    return node.text(separator=" ", strip=True)[:20000] if node else None
