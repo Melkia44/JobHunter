@@ -1,0 +1,11 @@
+# Référentiel des 20 employeurs cibles (Tier 1/2/3) — rempli en Phase 2
+# depuis l'onglet "Cibles employeurs" du Sheet + recherche des URLs carrières.
+#
+# Format :
+# employers:
+#   - name: "Manitou Group"
+#     tier: 1
+#     sector: "Industrie (DSI / services)"
+#     careers_url: "https://careers.manitou-group.com/fr/offres/"
+#     aliases: ["Manitou"]
+employers: []

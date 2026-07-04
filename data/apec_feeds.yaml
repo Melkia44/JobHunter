@@ -1,0 +1,8 @@
+# Flux RSS des recherches sauvegardées APEC — à remplir par Mathieu.
+# Fichier vide = source APEC skippée avec un warning (pas d'erreur).
+#
+# Format :
+# feeds:
+#   - name: "SDM Nantes"
+#     url: "https://www.apec.fr/rest/offres-emploi/rss/..."
+feeds: []

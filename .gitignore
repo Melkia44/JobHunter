@@ -1,0 +1,13 @@
+# Secrets
+.env
+secrets/*
+!secrets/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# NB : data/seen_jobs.db est VOLONTAIREMENT versionnée (dédup persistante entre runs GHA)

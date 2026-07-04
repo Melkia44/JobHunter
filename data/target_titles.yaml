@@ -1,0 +1,7 @@
+# Titres de postes cibles pour le sous-score title_match — rempli en Phase 3.
+#
+# Format :
+# titles:
+#   - "service delivery manager"
+#   - "chef de projet"
+titles: []
