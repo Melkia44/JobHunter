@@ -1,11 +1,92 @@
-# Référentiel des 20 employeurs cibles (Tier 1/2/3) — rempli en Phase 2
-# depuis l'onglet "Cibles employeurs" du Sheet + recherche des URLs carrières.
-#
-# Format :
-# employers:
-#   - name: "Manitou Group"
-#     tier: 1
-#     sector: "Industrie (DSI / services)"
-#     careers_url: "https://careers.manitou-group.com/fr/offres/"
-#     aliases: ["Manitou"]
-employers: []
+# Référentiel des 20 employeurs cibles (source : onglet "Cibles employeurs" du Sheet).
+# careers_url renseignée uniquement là où un scraper existe ou est envisagé :
+# - Manitou : seul scraper actif (rendu serveur)
+# - CA-GIP / Arkéa : bloqués edge (anti-bot) — reco 04/07/2026, pas de scraper
+# - Groupama / Harmonie (VYV) : SPA JS, API à capturer en DevTools (v2)
+# Les aliases servent au matching tier du scoring (Phase 3).
+employers:
+  - name: "Crédit Agricole – CA-GIP"
+    tier: 1
+    sector: "Banque/assurance-tech"
+    careers_url: null  # groupecreditagricole.jobs bloqué anti-bot (04/07/2026)
+    aliases: ["CA-GIP", "CA GIP", "Crédit Agricole GIP", "Credit Agricole Group Infrastructure Platform"]
+  - name: "Manitou Group"
+    tier: 1
+    sector: "Industrie (DSI / services)"
+    careers_url: "https://careers.manitou-group.com/fr/offres/"
+    aliases: ["Manitou"]
+  - name: "Crédit Mutuel Arkéa"
+    tier: 1
+    sector: "Banque mutualiste / tech"
+    careers_url: null  # recrutement.cmarkea.com bloqué anti-bot (04/07/2026)
+    aliases: ["Arkéa", "Arkea", "Credit Mutuel Arkea"]
+  - name: "Groupama (Loire-Bretagne)"
+    tier: 1
+    sector: "Assurance"
+    careers_url: null  # groupama-gan-recrute.com : listing injecté JS (v2 : capturer l'API)
+    aliases: ["Groupama", "Gan"]
+  - name: "Harmonie Mutuelle / VYV"
+    tier: 1
+    sector: "Mutuelle santé"
+    careers_url: null  # recrutement.groupe-vyv.fr : SPA React (v2 : sitemap.xml ou API)
+    aliases: ["Harmonie Mutuelle", "VYV", "Groupe VYV"]
+  - name: "Banque Populaire Grand Ouest / BPCE"
+    tier: 1
+    sector: "Banque"
+    aliases: ["Banque Populaire Grand Ouest", "BPGO", "BPCE"]
+  - name: "Sopra Banking Software"
+    tier: 1
+    sector: "Éditeur logiciel bancaire"
+    aliases: ["SBS", "Sopra Banking"]
+  - name: "La Banque Postale / Docaposte"
+    tier: 1
+    sector: "Numérique de confiance"
+    aliases: ["La Banque Postale", "Docaposte"]
+  - name: "Capgemini"
+    tier: 2
+    sector: "Conseil & services"
+    aliases: ["Cap Gemini", "Capgemini Engineering", "Sogeti"]
+  - name: "Sopra Steria"
+    tier: 2
+    sector: "Conseil & services"
+    aliases: ["Sopra"]
+  - name: "Accenture"
+    tier: 2
+    sector: "Conseil"
+    aliases: []
+  - name: "CGI"
+    tier: 2
+    sector: "Services IT"
+    aliases: ["CGI France"]
+  - name: "Inetum"
+    tier: 2
+    sector: "Services IT"
+    aliases: ["Gfi"]
+  - name: "Devoteam"
+    tier: 2
+    sector: "Conseil tech / cloud"
+    aliases: []
+  - name: "d²X Expertise"
+    tier: 2
+    sector: "Conseil (pilotage / service mgmt)"
+    aliases: ["d2X", "d2X Expertise", "D2X"]
+  - name: "Horizon Trading Solutions"
+    tier: 3
+    sector: "Fintech (trading marchés)"
+    aliases: ["Horizon Software"]
+  - name: "Akeneo"
+    tier: 3
+    sector: "Éditeur SaaS (PIM)"
+    aliases: []
+  - name: "iAdvize"
+    tier: 3
+    sector: "SaaS relation client"
+    aliases: ["iadvize"]
+  - name: "Lengow"
+    tier: 3
+    sector: "SaaS e-commerce"
+    aliases: []
+  - name: "Orange Business"
+    tier: 3
+    sector: "Télécom / services"
+    aliases: ["Orange Business Services", "OBS"]
