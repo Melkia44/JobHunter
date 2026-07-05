@@ -22,6 +22,7 @@ LOIRE_ATLANTIQUE_50KM = {
 }
 GEO_PREFILTERED: set[str] = {"france_travail", "apec_rss", "careers_site"}
 _DEPT44_RE = re.compile(r"^44\s*-|\b44\d{3}\b")
+_CP_RE = re.compile(r"\b(\d{5})\b")
 
 
 def score_location(location: str, remote_pct: int | None, source: Source) -> float:
@@ -37,6 +38,11 @@ def score_location(location: str, remote_pct: int | None, source: Source) -> flo
         return 75.0
     if _DEPT44_RE.search(loc) or "loire-atlantique" in loc_h:
         return 60.0
+    m = _CP_RE.search(loc)
+    if m and not m.group(1).startswith("44"):
+        # CP français explicite hors 44 (ex. lieu extrait d'une page détail Cegid) :
+        # positivement hors zone — le plancher géo-filtré ne doit pas s'appliquer
+        return 30.0
     if remote_pct is not None and remote_pct >= 50:
         return 70.0
     if source in GEO_PREFILTERED:

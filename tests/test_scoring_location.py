@@ -33,6 +33,12 @@ def test_jobspy_unknown_is_neutral():
     assert score_location("Lyon", None, "jobspy_indeed") == 50
 
 
+def test_explicit_out_of_zone_cp_penalized():
+    # Lieu extrait d'une page détail (Cegid) : CP hors 44 = positivement hors zone
+    assert score_location("33000", None, "careers_site") == 30
+    assert score_location("44300", None, "careers_site") == 60  # CP 44 reste dept-44
+
+
 def test_partial_remote_beats_unknown():
     assert score_location("Paris", 50, "jobspy_indeed") == 70
 
