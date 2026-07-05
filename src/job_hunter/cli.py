@@ -199,6 +199,7 @@ def run(
             }
             writer.update_employer_statuses(touched, employers, today)
             writer.recompute_pilotage()
+            writer.update_sources_status(_source_stats(all_jobs, alerts, selected), today.strftime("%d/%m/%Y"))
             wrote_ok = True
         except Exception as exc:  # noqa: BLE001
             logger.error(f"Écriture Sheet échouée — {exc}")
@@ -209,6 +210,22 @@ def run(
     db.close()
 
     report(len(all_jobs), dups, len(new_scored), retained, threshold, s.min_score_tier1, appended, dry_run, alerts)
+
+
+def _source_stats(
+    all_jobs: list[RawJob], alerts: list[str], selected: list[str]
+) -> dict[str, tuple[int, bool]]:
+    """Par source logique checkée ce run : (nb d'offres collectées, ok). ok=False si la
+    collecte a levé (l'erreur est dans alerts, préfixée « {src} : »)."""
+    from collections import Counter
+
+    logical = {"france_travail": "france_travail", "apec_rss": "apec", "careers_site": "careers_sites"}
+    counts: Counter = Counter()
+    for job in all_jobs:
+        key = "jobspy" if job.source.startswith("jobspy") else logical.get(job.source, job.source)
+        counts[key] += 1
+    errored = {src for src in selected if any(a.startswith(f"{src} :") for a in alerts)}
+    return {src: (counts.get(src, 0), src not in errored) for src in selected}
 
 
 def _dump_raw_samples(jobs: list[RawJob], n: int = 3) -> None:

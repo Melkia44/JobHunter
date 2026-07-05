@@ -24,6 +24,15 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 TAB_OFFERS = "Offres"
 TAB_EMPLOYERS = "Cibles"
 TAB_PILOTAGE = "Repères & pipeline"
+TAB_SOURCES = "Sources"
+
+# Sources logiques (base.SOURCES) → libellé affiché dans l'onglet 'Sources'
+SOURCE_ROW_LABELS = {
+    "jobspy": "jobspy (Indeed / Google)",
+    "france_travail": "France Travail",
+    "apec": "APEC (RSS)",
+    "careers_sites": "Sites carrières",
+}
 
 SOURCE_LABELS = {
     "jobspy_indeed": "Indeed",
@@ -193,6 +202,31 @@ class SheetWriter:
             return
         self._batch_update(data)
         logger.info(f"Sheet : compteurs pipeline recalculés ({total} cibles)")
+
+    # --- Onglet 'Sources' (tableau de bord) -----------------------------------
+
+    def update_sources_status(self, stats: dict[str, tuple[int, bool]], run_date: str) -> None:
+        """1 ligne/source : volume du dernier run, statut OK/NOK, date du dernier run
+        réussi. Ne touche que les sources checkées (présentes dans stats) ; les autres
+        gardent leur ligne, et 'Dernier run complet' n'avance que si la source est OK.
+        Jamais bloquant : un souci ici (onglet absent…) ne casse pas l'écriture principale."""
+        try:
+            order = ["jobspy", "france_travail", "apec", "careers_sites"]
+            existing = {r[0]: r for r in self._read(f"'{TAB_SOURCES}'!A2:D10") if r}
+            rows: list[list] = []
+            for key in order:
+                label = SOURCE_ROW_LABELS[key]
+                prev = existing.get(label, [label, "", "", "—"])
+                if key in stats:
+                    count, ok = stats[key]
+                    prev_date = prev[3] if len(prev) > 3 else "—"
+                    rows.append([label, count, "OK" if ok else "NOK", run_date if ok else prev_date])
+                else:  # source non sélectionnée ce run → on préserve sa ligne
+                    rows.append([(prev[i] if len(prev) > i else "") for i in range(4)])
+            self._batch_update([{"range": f"'{TAB_SOURCES}'!A2:D{1 + len(order)}", "values": rows}])
+            logger.info(f"Sheet : tableau '{TAB_SOURCES}' mis à jour")
+        except Exception as exc:  # noqa: BLE001 — tableau de bord non critique, jamais bloquant
+            logger.warning(f"'{TAB_SOURCES}' non mis à jour : {exc}")
 
     # --- Interne ----------------------------------------------------------------
 
