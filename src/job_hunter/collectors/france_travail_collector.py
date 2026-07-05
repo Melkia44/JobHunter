@@ -48,9 +48,10 @@ def collect(settings: Settings) -> list[RawJob]:
         "distance": DISTANCE_KM,
         "publieeDepuis": PUBLIEE_DEPUIS,
         "sort": 1,  # date de publication décroissante
-        # Filtre serveur : écarte MIS (intérim) et FRA (franchise) — le scoring n'a
-        # pas de critère contrat, on filtre donc à la source. Codes restants lisibles tels quels.
-        "typeContrat": "CDI,CDD",
+        # Filtre serveur : CDI uniquement (postes permanents) — écarte CDD, MIS (intérim),
+        # FRA (franchise)… à la source. Le filtre central base.is_excluded_contract couvre
+        # les autres sources et l'intitulé (stage/alternance).
+        "typeContrat": "CDI",
     }
     offers: dict[str, RawJob] = {}
 

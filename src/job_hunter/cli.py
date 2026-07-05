@@ -151,6 +151,12 @@ def run(
             logger.error(f"{src} : collecte échouée — {exc}")
             alerts.append(f"{src} : collecte échouée — {exc}")
 
+    # --- Filtre contrat : CDI uniquement (écarte CDD, stage, alternance, intérim…) ---
+    kept = [j for j in all_jobs if not base.is_excluded_contract(j)]
+    if len(all_jobs) - len(kept):
+        logger.info(f"filtre contrat : {len(all_jobs) - len(kept)} offre(s) non-CDI écartée(s)")
+    all_jobs = kept
+
     # --- Dédup (les nouveautés ne sont PAS encore marquées : cf. docstring) ---
     db = SeenJobsDB(s.db_path)
     today = date.today()
