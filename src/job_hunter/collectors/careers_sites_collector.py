@@ -57,7 +57,8 @@ def collect(settings: Settings) -> list[RawJob]:
             if not emp.careers_url:
                 continue
             domain = urlparse(emp.careers_url).netloc
-            scraper = SCRAPERS.get(domain)
+            # Dispatch : champ ats du YAML d'abord (scalable), domaine en héritage
+            scraper = SCRAPERS_BY_ATS.get(emp.ats or "") or SCRAPERS.get(domain)
             if scraper is None:
                 logger.warning(f"careers_site : pas de scraper pour {domain}, skippé")
                 continue
@@ -411,6 +412,44 @@ def _scrape_inetum(client: httpx.Client, emp: Employer) -> list[RawJob]:
     return jobs
 
 
+# --- Lever : SFEIR (API JSON publique) -------------------------------------------
+
+
+def _scrape_lever(client: httpx.Client, emp: Employer) -> list[RawJob]:
+    """API publique Lever : /v0/postings/{slug}?mode=json."""
+    slug = httpx.URL(emp.careers_url).path.strip("/").split("/")[0]
+    resp = client.get(
+        f"https://api.lever.co/v0/postings/{slug}", params={"mode": "json", "limit": 200}
+    )
+    resp.raise_for_status()
+    jobs: list[RawJob] = []
+    for p in resp.json() or []:
+        loc = ((p.get("categories") or {}).get("location") or "").strip()
+        low = loc.lower()
+        if not any(z in low for z in (*_ZONE_CITIES, "remote")):
+            continue
+        title = (p.get("text") or "").strip()
+        url = (p.get("hostedUrl") or "").strip()
+        if not title or not url:
+            continue
+        try:
+            posted = date.fromtimestamp(int(p.get("createdAt", 0)) / 1000)
+        except (TypeError, ValueError, OSError):
+            posted = None
+        jobs.append(
+            RawJob(
+                source="careers_site", external_id=str(p.get("id") or url), title=title,
+                company=emp.name, location=loc, contract_type=None,
+                salary_min=None, salary_max=None,
+                remote_pct=100 if "remote" in low else None,
+                description=(p.get("descriptionPlain") or "").strip() or None,
+                url=url, posted_at=posted,
+                raw={k: v for k, v in p.items() if k not in ("description", "lists")},
+            )
+        )
+    return jobs
+
+
 def _iso_date(v) -> date | None:
     try:
         return date.fromisoformat(str(v)[:10])
@@ -418,6 +457,7 @@ def _iso_date(v) -> date | None:
         return None
 
 
+# Dispatch historique par domaine (entrées d'origine)
 SCRAPERS: dict[str, Callable[[httpx.Client, Employer], list[RawJob]]] = {
     "careers.manitou-group.com": _scrape_manitou,
     "recrutement.arkea.com": _scrape_cegid,
@@ -426,6 +466,110 @@ SCRAPERS: dict[str, Callable[[httpx.Client, Employer], list[RawJob]]] = {
     "careers.akeneo.com": _scrape_teamtailor,
     "job-boards.eu.greenhouse.io": _scrape_greenhouse,
     "www.inetum.com": _scrape_inetum,
+}
+
+# --- Moissonneur SSR générique (ats: ssr + link_pattern dans le YAML) ------------
+
+_NAV_TITLES = {"lire la suite", "en savoir plus", "read more", "voir l'offre", "postuler", "candidater"}
+
+
+def _scrape_ssr_generic(client: httpx.Client, emp: Employer) -> list[RawJob]:
+    """Listing SSR quelconque : moissonne les liens dont le href contient
+    emp.link_pattern. Titre = texte du lien ; contrat par bloc englobant ; lieu et
+    description complétés par l'enrichissement post-dédup (CP hors 44 pénalisé au
+    scoring). Page 1 seulement (les listings trient par date : la veille quotidienne
+    rattrape le flux). Auto-diagnostic si 0 lien : échantillon des hrefs vus."""
+    if not emp.link_pattern:
+        logger.warning(f"careers_site[{emp.name}] : ats=ssr sans link_pattern, skip")
+        return []
+    resp = client.get(emp.careers_url)
+    resp.raise_for_status()
+    tree = HTMLParser(resp.text)
+    listing_path = httpx.URL(emp.careers_url).path.rstrip("/")
+
+    jobs: list[RawJob] = []
+    seen: set[str] = set()
+    matched_texts: list[str] = []  # diagnostic : liens matchés même si rejetés ensuite
+    for a in tree.css("a"):
+        href = (a.attributes.get("href") or "").split("#")[0].split("?")[0]
+        if not href:
+            continue
+        url = str(httpx.URL(emp.careers_url).join(href))
+        # Match sur l'URL ABSOLUE résolue : les hrefs relatifs («nos-offres/x»)
+        # ne matchaient pas un pattern «/nos-offres/» (bug calibrage 05/07)
+        if emp.link_pattern not in url:
+            continue
+        if httpx.URL(url).path.rstrip("/") == listing_path or url in seen:
+            continue
+        title = a.text(strip=True)
+        matched_texts.append(title or "∅")
+        if not title:  # lien-image : titre dans le heading du bloc englobant
+            current = a
+            for _ in range(3):
+                if current.parent is None:
+                    break
+                current = current.parent
+                h = current.css_first("h2, h3, h4")
+                if h is not None:
+                    title = h.text(strip=True)
+                    break
+        if not title or len(title) < 8 or title.lower() in _NAV_TITLES:
+            # Dernier recours : le slug de l'URL porte souvent le titre
+            # (Flatchr «…/vacancy/1234-assistant-data-engineer», Drupal, etc.)
+            title = _title_from_slug(url)
+        if not title or len(title) < 8:
+            continue
+        seen.add(url)
+        meta = _closest_block_text(a)
+        # Pas de filtre stage/alternance ici : le bloc englobant peut contenir le menu
+        # « Stage/Alternance » du site et tuer toutes les offres (vu sur mc2i le 06/07).
+        # L'exclusion contrat est faite en aval sur le TITRE (base.is_excluded_contract).
+        contract = next(
+            (c for c in ("CDI", "CDD") if re.search(rf"\b{c}\b", meta, re.I)), None
+        )
+        jobs.append(
+            RawJob(
+                source="careers_site", external_id=url, title=title, company=emp.name,
+                location="",  # rempli à l'enrichissement
+                contract_type=contract, salary_min=None, salary_max=None, remote_pct=None,
+                description=None, url=url, posted_at=_parse_fr_date(meta),
+                raw={"employer": emp.name, "meta_text": meta[:300]},
+            )
+        )
+    if not jobs:
+        if matched_texts:  # les liens matchent mais tous rejetés : problème de TITRE
+            logger.warning(
+                f"careers_site[{emp.name}] : {len(matched_texts)} lien(s) matchent "
+                f"'{emp.link_pattern}' mais 0 retenu — textes de liens : "
+                f"{[t[:40] for t in matched_texts[:10]]}"
+            )
+        else:
+            sample = sorted({(a.attributes.get("href") or "")[:70] for a in tree.css("a") if a.attributes.get("href")})[:15]
+            logger.warning(
+                f"careers_site[{emp.name}] : 0 lien matchant '{emp.link_pattern}' — hrefs vus : {sample}"
+            )
+    return jobs
+
+
+def _title_from_slug(url: str) -> str:
+    """«…/vacancy/1234-assistant-data-engineer» → «Assistant data engineer»."""
+    seg = httpx.URL(url).path.rstrip("/").split("/")[-1]
+    seg = re.sub(r"\.(html?|aspx)$", "", seg)
+    for _ in range(2):  # ids numériques/hex en tête de slug
+        seg = re.sub(r"^[\da-f]{2,}-", "", seg)
+    title = seg.replace("-", " ").replace("_", " ").strip()
+    return title[:1].upper() + title[1:] if title else ""
+
+
+# Dispatch par ATS (champ `ats` du YAML) — scalable : un nouvel employeur sur un
+# ATS supporté = une entrée YAML, zéro code
+SCRAPERS_BY_ATS: dict[str, Callable[[httpx.Client, Employer], list[RawJob]]] = {
+    "smartrecruiters": _scrape_smartrecruiters,
+    "teamtailor": _scrape_teamtailor,
+    "greenhouse": _scrape_greenhouse,
+    "lever": _scrape_lever,
+    "cegid": _scrape_cegid,
+    "ssr": _scrape_ssr_generic,
 }
 
 

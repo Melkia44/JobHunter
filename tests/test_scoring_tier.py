@@ -33,5 +33,5 @@ def test_real_employers_yaml_parses():
 
     path = Path(__file__).parents[1] / "data" / "employers.yaml"
     employers = load_employers(path)
-    assert len(employers) == 20
-    assert sum(1 for e in employers if e.tier == 1) == 8
+    assert len(employers) >= 65  # 20 cibles historiques + élargissement TOP50 (05/07/2026)
+    assert sum(1 for e in employers if e.tier == 1) == 8  # le tier 1 reste les 8 cibles P1

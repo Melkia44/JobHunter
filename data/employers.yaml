@@ -1,12 +1,16 @@
-# Référentiel des 20 employeurs cibles (source : onglet "Cibles" du Sheet).
-# careers_url renseignée uniquement là où un scraper existe (reco du 05/07/2026 sur
-# les URLs fournies par Mathieu — verdicts en commentaire pour les autres).
-# Les aliases servent au matching tier du scoring (Phase 3).
+# Référentiel des employeurs cibles.
+# - 20 cibles historiques (onglet "Cibles" du Sheet) : tiers 1-3 d'origine.
+# - Élargissement TOP50 du 05/07/2026 (voir Jobbing/TOP50_employeurs_Nantes.md).
+# Une entrée SANS careers_url donne quand même le bonus tier sur les offres vues via
+# Indeed/FT/APEC. careers_url + ats = scraping direct en plus.
+# ats ∈ {smartrecruiters, teamtailor, greenhouse, lever, cegid, ssr} ; ssr requiert
+# link_pattern (motif des hrefs d'offres — hypothèses calibrées via les warnings de run).
 employers:
+  # --- Cibles historiques -----------------------------------------------------
   - name: "Crédit Agricole – CA-GIP"
     tier: 1
     sector: "Banque/assurance-tech"
-    careers_url: null  # groupecreditagricole.jobs : réponse vide même sur URL profonde (anti-bot edge) — v3
+    careers_url: null  # groupecreditagricole.jobs : anti-bot edge — v3
     aliases: ["CA-GIP", "CA GIP", "Crédit Agricole GIP", "Credit Agricole Group Infrastructure Platform"]
   - name: "Manitou Group"
     tier: 1
@@ -16,92 +20,374 @@ employers:
   - name: "Crédit Mutuel Arkéa"
     tier: 1
     sector: "Banque mutualiste / tech"
-    careers_url: "https://recrutement.arkea.com/offre-de-emploi/liste-offres.aspx"  # Cegid, facette 44
+    careers_url: "https://recrutement.arkea.com/offre-de-emploi/liste-offres.aspx"
+    ats: "cegid"
     aliases: ["Arkéa", "Arkea", "Credit Mutuel Arkea"]
   - name: "Groupama (Loire-Bretagne)"
     tier: 1
     sector: "Assurance"
-    careers_url: null  # groupama-gan-recrute.com : listing injecté JS, pas de CPT wp-json — v3 (DevTools)
+    careers_url: null  # listing injecté JS — v3 (DevTools)
     aliases: ["Groupama", "Gan"]
   - name: "Harmonie Mutuelle / VYV"
     tier: 1
     sector: "Mutuelle santé"
-    careers_url: null  # recrutement.harmonie-mutuelle.fr : Cegid DigitalRecruiters JS ; piste sitemap+JSON-LD — v3
+    careers_url: null  # DigitalRecruiters JS ; piste sitemap+JSON-LD — v3
     aliases: ["Harmonie Mutuelle", "VYV", "Groupe VYV"]
   - name: "Banque Populaire Grand Ouest / BPCE"
     tier: 1
     sector: "Banque"
-    careers_url: null  # recrutement.bpce.fr : SPA React (tax_brands=bpgo en param) — v3 (API à reverser)
+    careers_url: null  # recrutement.bpce.fr : SPA React — v3
     aliases: ["Banque Populaire Grand Ouest", "BPGO", "BPCE"]
   - name: "Sopra Banking Software"
     tier: 1
     sector: "Éditeur logiciel bancaire"
-    # API SmartRecruiters du groupe : couvre AUSSI Sopra Steria (attribution par company du posting).
-    # careers_url volontairement absente de l'entrée Sopra Steria pour ne pas fetcher deux fois.
+    # API SmartRecruiters du groupe : couvre AUSSI Sopra Steria (attribution par
+    # company du posting). careers_url absente de l'entrée Sopra Steria exprès.
     careers_url: "https://careers.smartrecruiters.com/SopraSteria1"
+    ats: "smartrecruiters"
     aliases: ["SBS", "Sopra Banking"]
   - name: "La Banque Postale / Docaposte"
     tier: 1
     sector: "Numérique de confiance"
-    careers_url: "https://docaposte-recrute.profils.org/offre-de-emploi/liste-toutes-offres.aspx?all=1"  # Cegid, facette 44
+    careers_url: "https://docaposte-recrute.profils.org/offre-de-emploi/liste-toutes-offres.aspx?all=1"
+    ats: "cegid"
     aliases: ["La Banque Postale", "Docaposte"]
   - name: "Capgemini"
     tier: 2
     sector: "Conseil & services"
-    careers_url: null  # capgemini.com : listing 100 % JS, wp/v2/jobs vide — v3
+    careers_url: null  # listing 100 % JS — v3
     aliases: ["Cap Gemini", "Capgemini Engineering", "Sogeti"]
   - name: "Sopra Steria"
     tier: 2
     sector: "Conseil & services"
-    careers_url: null  # couvert par l'API SmartRecruiters SopraSteria1 (entrée SBS) ; Attrax SSR page 1 seule sinon
+    careers_url: null  # couvert par l'API SmartRecruiters SopraSteria1 (entrée SBS)
     aliases: ["Sopra"]
   - name: "Accenture"
     tier: 2
     sector: "Conseil"
-    careers_url: null  # Workday (wd103) : API CXS en POST, faisable en httpx — v3
+    careers_url: null  # Workday CXS en POST — v3
     aliases: []
   - name: "CGI"
     tier: 2
     sector: "Services IT"
-    careers_url: null  # Njoyn SSR mais pagination/filtre ville en POST JS — v3
+    careers_url: null  # Njoyn SSR mais pagination/filtre en POST JS — v3
     aliases: ["CGI France"]
   - name: "Inetum"
     tier: 2
     sector: "Services IT"
-    careers_url: "https://www.inetum.com/fr/accueil/carrieres/jobs.html"  # SSR, best effort (liens à confirmer)
+    careers_url: "https://www.inetum.com/fr/accueil/carrieres/jobs.html"
     aliases: ["Gfi"]
   - name: "Devoteam"
     tier: 2
     sector: "Conseil tech / cloud"
-    careers_url: "https://careers.smartrecruiters.com/Devoteam"  # API SmartRecruiters
+    careers_url: "https://careers.smartrecruiters.com/Devoteam"
+    ats: "smartrecruiters"
     aliases: []
   - name: "d²X Expertise"
     tier: 2
     sector: "Conseil (pilotage / service mgmt)"
-    careers_url: null  # oned2x.com : pages listing en erreur, RSS mort — à retester
+    careers_url: null  # site en erreur, RSS mort — à retester
     aliases: ["d2X", "d2X Expertise", "D2X"]
   - name: "Horizon Trading Solutions"
     tier: 3
     sector: "Fintech (trading marchés)"
-    careers_url: "https://job-boards.eu.greenhouse.io/horizontradingsolutions"  # Greenhouse EU
+    careers_url: "https://job-boards.eu.greenhouse.io/horizontradingsolutions"
+    ats: "greenhouse"
     aliases: ["Horizon Software"]
   - name: "Akeneo"
     tier: 3
     sector: "Éditeur SaaS (PIM)"
-    careers_url: "https://careers.akeneo.com/jobs"  # Teamtailor, /jobs.json confirmé
+    careers_url: "https://careers.akeneo.com/jobs"
+    ats: "teamtailor"
     aliases: []
   - name: "iAdvize"
     tier: 3
     sector: "SaaS relation client"
-    careers_url: null  # non fourni / non reconnu — à ajouter si URL carrière trouvée
+    careers_url: null
     aliases: ["iadvize"]
   - name: "Lengow"
     tier: 3
     sector: "SaaS e-commerce"
-    careers_url: null  # offres hébergées sur Welcome to the Jungle : source interdite par le brief
+    careers_url: null  # offres sur WTTJ : interdit
     aliases: []
   - name: "Orange Business"
     tier: 3
     sector: "Télécom / services"
-    careers_url: null  # orange.jobs : Phenom People, coquille JS ; piste API POST /widgets — v3
+    careers_url: null  # Phenom, API POST — v3
     aliases: ["Orange Business Services", "OBS"]
+
+  # --- Élargissement TOP50 (05/07/2026, verdicts reco du même jour) -------------
+  - name: "SNCF Connect & Tech"
+    tier: 2
+    sector: "Tech e-commerce mobilité"
+    careers_url: null  # 403 anti-bot au run du 05/07 — v3 ; bonus tier via marché ouvert
+    aliases: ["SNCF Connect", "SNCF C&T"]
+  - name: "Airbus"
+    tier: 2
+    sector: "Aéronautique"
+    careers_url: null  # Workday — v3
+    aliases: ["Airbus Operations", "Airbus Atlantic"]
+  - name: "Lucca"
+    tier: 2
+    sector: "Éditeur SIRH"
+    careers_url: "https://jobs.world.luccasoftware.com/lucca"
+    ats: "ssr"
+    link_pattern: "/lucca/"
+    aliases: []
+  - name: "U Enseigne"
+    tier: 2
+    sector: "Retail coopératif (DSI)"
+    careers_url: null  # SPA custom U IRIS — v3
+    aliases: ["U Tech", "Coopérative U", "Système U", "Systeme U"]
+  - name: "Euro-Information"
+    tier: 2
+    sector: "IT bancaire (Crédit Mutuel)"
+    careers_url: "https://www.e-i.com/fr/nos-offres/nos-offres.html"
+    ats: "ssr"
+    link_pattern: "offre"
+    aliases: ["Euro Information", "CIC Ouest"]
+  - name: "Enedis"
+    tier: 2
+    sector: "Énergie (distribution)"
+    careers_url: "https://www.enedis.fr/emploi"
+    ats: "ssr"
+    link_pattern: "/emploi/"
+    aliases: []
+  - name: "Vinci Énergies"
+    tier: 2
+    sector: "Énergie / IT (Axians)"
+    careers_url: null  # Radancy, résultats JS — v3
+    aliases: ["Vinci Energies", "Axians"]
+  - name: "Chantiers de l'Atlantique"
+    tier: 2
+    sector: "Naval"
+    careers_url: null  # WAF/anti-bot — v3
+    aliases: []
+  - name: "Wavestone"
+    tier: 2
+    sector: "Conseil premium"
+    careers_url: "https://careers.smartrecruiters.com/Wavestone1"
+    ats: "smartrecruiters"
+    aliases: []
+  - name: "OVHcloud"
+    tier: 2
+    sector: "Cloud"
+    careers_url: null  # SuccessFactors — v3
+    aliases: ["OVH"]
+  - name: "Proginov"
+    tier: 2
+    sector: "Éditeur ERP (capital salariés)"
+    careers_url: null  # candidature spontanée uniquement, pas de listing
+    aliases: []
+  - name: "Claranet"
+    tier: 2
+    sector: "Cloud / infogérance"
+    careers_url: "https://claranet-career.talent-soft.com/offre-de-emploi/liste-toutes-offres.aspx"
+    ats: "cegid"  # Talentsoft = même moteur que Arkéa/Docaposte
+    aliases: []
+  - name: "Onepoint"
+    tier: 2
+    sector: "Conseil tech"
+    careers_url: "https://careers.smartrecruiters.com/onepoint"
+    ats: "smartrecruiters"
+    aliases: ["One point"]
+  - name: "Extia"
+    tier: 2
+    sector: "Conseil IT (GPTW)"
+    careers_url: null  # offres chargées en JS (confirmé aux runs des 05-06/07) — v3
+    aliases: []
+  - name: "SII"
+    tier: 2
+    sector: "ESN (GPTW)"
+    careers_url: null  # seuls des liens institutionnels en HTML, offres en JS — v3
+    aliases: ["SII Atlantique", "Groupe SII"]
+  - name: "mc2i"
+    tier: 2
+    sector: "Conseil SI (AMOA/PMO)"
+    careers_url: "https://talents.mc2i.fr/nos-offres"
+    ats: "ssr"
+    link_pattern: "/nos-offres/"
+    aliases: ["mc2i Groupe"]
+  - name: "Doctolib"
+    tier: 3
+    sector: "Scale-up e-santé"
+    careers_url: "https://boards.greenhouse.io/doctolib"
+    ats: "greenhouse"
+    aliases: []
+  - name: "Nickel"
+    tier: 3
+    sector: "Fintech (BNP)"
+    careers_url: null  # portail BNP
+    aliases: ["Compte Nickel"]
+  - name: "Naval Group"
+    tier: 3
+    sector: "Défense"
+    careers_url: null  # listing sans offres en HTML (calibrage 05/07) — v3
+    aliases: []
+  - name: "GRDF"
+    tier: 3
+    sector: "Énergie"
+    careers_url: null  # SuccessFactors (portail Engie) — v3
+    aliases: []
+  - name: "EDF"
+    tier: 3
+    sector: "Énergie"
+    careers_url: null  # reco à faire
+    aliases: []
+  - name: "Société Générale"
+    tier: 3
+    sector: "Banque"
+    careers_url: null  # Drupal + Taleo JS — v3
+    aliases: ["Societe Generale"]
+  - name: "Sercel"
+    tier: 3
+    sector: "Industrie high-tech"
+    careers_url: null  # Workday (cgg/sercelcareer) POST — v3
+    aliases: ["Viridien"]
+  - name: "imagino"
+    tier: 3
+    sector: "Scale-up data (CDP)"
+    careers_url: "https://jobs.imagino.com/jobs"
+    ats: "teamtailor"  # /jobs.json confirmé 200
+    aliases: []
+  - name: "Daher"
+    tier: 3
+    sector: "Aéro / logistique"
+    careers_url: null  # Workday POST — v3
+    aliases: []
+  - name: "SFEIR"
+    tier: 3
+    sector: "Conseil cloud/data"
+    careers_url: "https://jobs.lever.co/sfeir"
+    ats: "lever"
+    aliases: []
+  - name: "Ippon Technologies"
+    tier: 3
+    sector: "Conseil tech"
+    careers_url: null  # site bloqué au fetch — à retester
+    aliases: ["Ippon"]
+  - name: "Terrena"
+    tier: 3
+    sector: "Agro coopératif (DSI Ancenis)"
+    careers_url: null  # ATS Beetween, JS requis — v3
+    aliases: []
+  - name: "Theodo"
+    tier: 3
+    sector: "Conseil produit"
+    careers_url: null  # offres sur WTTJ : interdit
+    aliases: ["BAM", "Theodo Group"]
+  - name: "Talan"
+    tier: 3
+    sector: "Conseil tech"
+    careers_url: "https://careers.smartrecruiters.com/Talan"
+    ats: "smartrecruiters"  # slug Talan confirmé
+    aliases: []
+  - name: "Hardis Group"
+    tier: 3
+    sector: "ESN + éditeur supply"
+    careers_url: null  # WAF au fetch — à retester en local
+    aliases: ["Hardis"]
+  - name: "Lacroix Group"
+    tier: 3
+    sector: "Électronique / IoT"
+    careers_url: null  # bloqué au fetch ; piste Teamtailor à retester en local
+    aliases: ["Lacroix"]
+  - name: "Sodebo"
+    tier: 3
+    sector: "Agroalimentaire (DSI)"
+    careers_url: null  # listing sans offres en HTML (calibrage 05/07) — v3
+    aliases: []
+  - name: "VIF Software"
+    tier: 3
+    sector: "Éditeur ERP agro"
+    careers_url: null  # bloqué au fetch — à retester en local
+    aliases: ["VIF"]
+  - name: "LNA Santé"
+    tier: 3
+    sector: "Santé privée (siège Vertou)"
+    careers_url: null  # listing sans offres en HTML (calibrage 05/07) — v3
+    aliases: ["LNA"]
+  - name: "Shopopop"
+    tier: 3
+    sector: "Scale-up livraison"
+    careers_url: "https://careers.werecruit.io/fr/shopopop/site-map"  # site-map = SSR
+    ats: "ssr"
+    link_pattern: "/fr/shopopop/"
+    aliases: []
+  - name: "Gens de Confiance"
+    tier: 3
+    sector: "Scale-up plateforme"
+    careers_url: null  # offres sur WTTJ : interdit
+    aliases: []
+  - name: "Kiplin"
+    tier: 3
+    sector: "Scale-up e-santé"
+    careers_url: null  # pas de listing, candidature spontanée
+    aliases: []
+  - name: "Weenat"
+    tier: 3
+    sector: "Scale-up agtech"
+    careers_url: null  # listing sans offres en HTML (calibrage 05/07) — v3
+    aliases: []
+  - name: "IDEA Groupe"
+    tier: 3
+    sector: "Logistique (DSI)"
+    careers_url: "https://groupeidea.flatchr.io"
+    ats: "ssr"
+    link_pattern: "vacancy"
+    aliases: ["IDEA"]
+  - name: "Armor Group"
+    tier: 3
+    sector: "Industrie"
+    careers_url: "https://careers.armor-group.com/fr/groupe-armor/site-map"  # site-map = SSR
+    ats: "ssr"
+    link_pattern: "/fr/offres"  # les offres vivent sous /fr/offres/… (calibrage 05/07)
+    aliases: ["Armor"]
+  - name: "Maisons du Monde"
+    tier: 3
+    sector: "Retail (siège Vertou)"
+    careers_url: null  # Workday CXS POST — v3
+    aliases: []
+  - name: "Apside"
+    tier: 3
+    sector: "ESN"
+    careers_url: null  # bloqué au fetch — à retester en local
+    aliases: []
+  - name: "Alten"
+    tier: 3
+    sector: "ESN / ingénierie"
+    careers_url: null  # Talentsoft groupe — URL exacte à identifier, piste ats=cegid
+    aliases: ["Alten Ouest", "Alten Sud-Ouest"]
+  - name: "Open"
+    tier: 3
+    sector: "ESN (centre de test)"
+    careers_url: null  # bloqué au fetch — à retester en local
+    aliases: ["Groupe Open"]
+  - name: "Conserto"
+    tier: 3
+    sector: "ESN régionale"
+    careers_url: "https://carrieres.conserto.pro"
+    ats: "teamtailor"  # probable — échec isolé si faux
+    aliases: []
+  - name: "Astek"
+    tier: 3
+    sector: "ESN"
+    careers_url: null  # listing JS — fallback marché ouvert
+    aliases: []
+  - name: "Sigma Groupe"
+    tier: 3
+    sector: "Éditeur + ESN (siège Nantes)"
+    careers_url: "https://carrieres.sigma.fr/jobs"
+    ats: "teamtailor"  # /jobs.json confirmé 200
+    aliases: ["Sigma Informatique", "Sigma"]
+  - name: "Eurofins"
+    tier: 3
+    sector: "Bio-analyse (IT)"
+    careers_url: "https://careers.smartrecruiters.com/Eurofins"
+    ats: "smartrecruiters"  # slug Eurofins confirmé
+    aliases: ["Eurofins Scientific"]
+  - name: "Zenika"
+    tier: 3
+    sector: "Conseil tech"
+    careers_url: null  # bloqué au fetch — à retester en local
+    aliases: []

@@ -55,10 +55,12 @@ class ScoredJob(BaseModel):
 
 
 class Employer(BaseModel):
-    """Employeur cible du référentiel (onglet 'Cibles employeurs')."""
+    """Employeur cible du référentiel employers.yaml."""
 
     name: str
     tier: Literal[1, 2, 3]
     sector: str
     careers_url: str | None = None
     aliases: list[str] = []     # variantes de nom pour matching
+    ats: str | None = None      # dispatch scraper par ATS (smartrecruiters, teamtailor, ssr, …)
+    link_pattern: str | None = None  # pour ats=ssr : motif des hrefs d'offres du listing
