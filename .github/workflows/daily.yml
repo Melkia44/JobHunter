@@ -47,9 +47,29 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Commit updated dedup DB
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/seen_jobs.db
-          git diff --cached --quiet || git commit -m "chore(dedup): update seen_jobs.db [skip ci]"
-          git push
+          if git diff --quiet -- data/seen_jobs.db; then
+            echo "DB dédup inchangée — rien à pousser."
+            exit 0
+          fi
+          # Push résilient : des runs qui se suivent modifient tous data/seen_jobs.db
+          # (binaire) → un rebase butterait sur un conflit binaire inauto-mergeable. On
+          # resynchronise sur origin/main en GARDANT notre version de la DB (l'union
+          # n'est pas critique : la dédup Sheet par URL reste le garde-fou). Retry x3
+          # pour absorber une course avec un run concurrent.
+          for i in 1 2 3; do
+            git add data/seen_jobs.db
+            git commit -m "chore(dedup): update seen_jobs.db [skip ci]" || true
+            if git push origin HEAD:main; then
+              echo "Push OK (tentative $i)."
+              exit 0
+            fi
+            echo "Push rejeté (tentative $i) — resync sur origin/main, on conserve notre DB."
+            git fetch origin main
+            git reset --soft origin/main
+          done
+          echo "Push définitivement échoué après 3 tentatives." >&2
+          exit 1
