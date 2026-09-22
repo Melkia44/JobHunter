@@ -19,6 +19,8 @@ from job_hunter.sheet_writer import _posted_label, stale_rows
         "Chef de projet marketing et communication H/F",
         "Assistant Chef de Chantier - Génie Civil H/F",
         "PROJECT MANAGER PIPE INSTALLATION H/F",
+        "Chef de projet MOE CVC H/F",  # terme BTP : non rattrapable par « moe »
+        "Ingénieur de Projet MOE Hydraulique Urbaine H/F",
     ],
 )
 def test_off_domain_excluded(make_job, title):
@@ -36,6 +38,8 @@ def test_off_domain_excluded(make_job, title):
         "Data Engineer Marketing – sur Nantes",
         "PO Technique / Chef de Projet Transformation IT – Environnements Cloud & Legacy (H/F)",
         "Product Owner Data Marketing - H/F - Nantes",
+        "Chef de Projet MOE – Marketing & Retail h/f",  # MOE IT : reste gardé
+        "Chef de Projet MOA F/H",
     ],
 )
 def test_it_titles_kept(make_job, title):
