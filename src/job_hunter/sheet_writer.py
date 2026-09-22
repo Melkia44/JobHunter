@@ -7,7 +7,7 @@ jour des statuts.
 """
 import re
 from collections import Counter
-from datetime import date
+from datetime import date, datetime
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -108,6 +108,22 @@ class SheetWriter:
             ).execute()
         logger.info(f"Sheet : {len(rows)} offre(s) ajoutée(s) dans '{TAB_OFFERS}'")
         return len(rows)
+
+    def archive_stale_offers(self, today: date, days: int) -> int:
+        """Passe en « Archivée » les offres restées « Nouvelle » plus de `days` jours :
+        la plupart ont expiré chez la source. Jamais bloquant."""
+        try:
+            rows = self._read(f"'{TAB_OFFERS}'!A2:K")
+            idx = stale_rows(rows, today, days)
+            if idx:
+                self._batch_update(
+                    [{"range": f"'{TAB_OFFERS}'!K{i + 2}", "values": [["Archivée"]]} for i in idx]
+                )
+            logger.info(f"Sheet : {len(idx)} offre(s) « Nouvelle » de plus de {days} j archivée(s)")
+            return len(idx)
+        except Exception as exc:  # noqa: BLE001 — nettoyage non critique
+            logger.warning(f"Archivage des offres anciennes non effectué : {exc}")
+            return 0
 
     # --- Onglet 'Cibles employeurs' -------------------------------------------
 
@@ -279,7 +295,7 @@ def _offer_row(sj: ScoredJob, today: date) -> list:
         job.location or "n.c.",
         job.contract_type or "n.c.",
         _salary_label(job.salary_min, job.salary_max),
-        _age_label(job.posted_at, today),
+        _posted_label(job.posted_at),
         job.url,
         _source_label(job.source, job.company),
         sj.match_reason,
@@ -296,11 +312,27 @@ def _salary_label(mn: int | None, mx: int | None) -> str:
     return "n.c."
 
 
-def _age_label(posted: date | None, today: date) -> str:
-    if posted is None:
-        return "récent"
-    days = max(0, (today - posted).days)
-    return "1 jour" if days <= 1 else f"{days} jours"
+def _posted_label(posted: date | None) -> str:
+    """Date de publication réelle (col G). Remplace l'ancien « N jours », figé au jour
+    de la collecte et donc trompeur dès le lendemain (relevé du 22/09/2026)."""
+    return posted.strftime("%d/%m/%Y") if posted else "n.c."
+
+
+def stale_rows(rows: list[list[str]], today: date, days: int) -> list[int]:
+    """Index (0-based, relatifs à rows) des offres encore « Nouvelle » collectées il y a
+    plus de `days` jours. rows = A2:K de l'onglet Offres (A = date de collecte, K = statut).
+    Les lignes au statut modifié à la main ne sont jamais touchées."""
+    out: list[int] = []
+    for i, row in enumerate(rows):
+        if len(row) < 11 or normalize(row[10]) != "nouvelle":
+            continue
+        try:
+            collected = datetime.strptime(row[0].strip(), "%d/%m/%Y").date()
+        except ValueError:
+            continue  # date illisible : on ne touche pas
+        if (today - collected).days > days:
+            out.append(i)
+    return out
 
 
 def _source_label(source: str, company: str) -> str:
