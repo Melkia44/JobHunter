@@ -326,11 +326,12 @@ def _scrape_teamtailor(client: httpx.Client, emp: Employer) -> list[RawJob]:
 
 
 def _scrape_greenhouse(client: httpx.Client, emp: Employer) -> list[RawJob]:
-    """API Greenhouse boards ; hôte .eu détecté depuis careers_url."""
+    """API Greenhouse boards. Hôte unique boards-api.greenhouse.io, y compris pour les
+    boards EU (job-boards.eu.greenhouse.io) : boards-api.eu.greenhouse.io n'existe pas
+    en DNS (« Name or service not known », constaté le 22/09/2026)."""
     u = httpx.URL(emp.careers_url)
     slug = u.path.strip("/").split("/")[0]
-    api_host = "boards-api.eu.greenhouse.io" if ".eu." in u.host else "boards-api.greenhouse.io"
-    resp = client.get(f"https://{api_host}/v1/boards/{slug}/jobs")
+    resp = client.get(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs")
     resp.raise_for_status()
     jobs: list[RawJob] = []
     for j in resp.json().get("jobs") or []:
