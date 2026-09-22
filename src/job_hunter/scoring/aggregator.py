@@ -17,6 +17,16 @@ WEIGHTS: dict[str, float] = {
     "tier": 0.15,
 }
 
+# Offre sans description (alertes mail, pages carrières sans détail) : hard/soft skills
+# sont calculés sur la description → mécaniquement ~0, l'offre plafonnait sous 65 même
+# avec un titre parfait (SDM ITIL SCC à 63, relevé du 22/09/2026). On renormalise sur
+# les composantes réellement mesurables.
+WEIGHTS_NO_DESCRIPTION: dict[str, float] = {
+    "title_match": 0.55,
+    "location": 0.30,
+    "tier": 0.15,
+}
+
 
 def score_job(job: RawJob, employers: list[Employer], target_titles: list[str]) -> ScoredJob:
     # Titre TOUJOURS inclus : un titre « SDM » ne doit pas perdre son 'delivery'
@@ -30,7 +40,8 @@ def score_job(job: RawJob, employers: list[Employer], target_titles: list[str]) 
         location=score_location(job.location, job.remote_pct, job.source),
         tier=tier_score,
     )
-    score = round(sum(w * getattr(breakdown, k) for k, w in WEIGHTS.items()), 1)
+    weights = WEIGHTS if (job.description or "").strip() else WEIGHTS_NO_DESCRIPTION
+    score = round(sum(w * getattr(breakdown, k) for k, w in weights.items()), 1)
     scored = ScoredJob(
         job=job,
         fingerprint=compute_fingerprint(job.company, job.title),
