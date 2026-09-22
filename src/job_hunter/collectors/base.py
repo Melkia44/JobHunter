@@ -60,10 +60,24 @@ _IT_MARKER_RE = re.compile(
 )
 
 
+# Termes BTP qu'aucun marqueur IT ne rattrape : en BTP, MOE/MOA (maîtrise d'œuvre /
+# d'ouvrage) sont courants (« Chef de projet MOE CVC »). Retirer moe/moa des marqueurs
+# IT aurait perdu 3 postes MOE IT (« MOE – Marketing & Retail ») pour 1 fuite BTP
+# corrigée (rejeu historique du 22/09/2026) ; cette liste corrige la fuite sans perte.
+_HARD_OFF_DOMAIN_RE = re.compile(
+    r"\b("
+    r"btp|batiments?|chantiers?|travaux|voirie|vrd|assainissement|hydraulique|cvc|"
+    r"fluides?|tce|menuiserie|plomberie|genie (civil|climatique)|maitrise d.oeuvre"
+    r")\b"
+)
+
+
 def is_off_domain(job: RawJob) -> bool:
-    """Vrai si l'intitulé relève d'un métier hors IT (BTP, industrie, HSE, marketing…)
-    ET ne porte aucun marqueur IT explicite."""
+    """Vrai si l'intitulé relève du BTP (sans rattrapage possible), ou d'un autre métier
+    hors IT (industrie, HSE, marketing…) sans marqueur IT explicite."""
     title = normalize(job.title)
+    if _HARD_OFF_DOMAIN_RE.search(title):
+        return True
     return bool(_OFF_DOMAIN_RE.search(title)) and not _IT_MARKER_RE.search(title)
 
 
