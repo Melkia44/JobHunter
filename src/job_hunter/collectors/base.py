@@ -12,7 +12,7 @@ from job_hunter.normalizer import normalize
 CollectFn = Callable[..., list[RawJob]]
 
 # Noms de sources acceptés par `run --sources` (ordre = ordre d'exécution)
-SOURCES = ("jobspy", "france_travail", "apec", "careers_sites")
+SOURCES = ("jobspy", "france_travail", "apec", "careers_sites", "email_alerts")
 
 # --- Filtre contrat : on ne garde que le CDI (postes permanents) -------------
 # Le champ contract_type n'est ni fiable ni homogène entre sources (codes FT, libellés

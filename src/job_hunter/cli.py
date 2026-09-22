@@ -99,7 +99,7 @@ def run(
     sources: list[str] | None = typer.Option(
         None,
         "--sources",
-        help="jobspy | france_travail | apec | careers_sites (défaut : toutes)",
+        help="jobspy | france_travail | apec | careers_sites | email_alerts (défaut : toutes)",
     ),
     include_linkedin: bool = typer.Option(
         False, "--include-linkedin", help="LinkedIn via JobSpy — local uniquement"
@@ -150,6 +150,10 @@ def run(
                 from job_hunter.collectors import careers_sites_collector
 
                 all_jobs.extend(careers_sites_collector.collect(s))
+            elif src == "email_alerts":
+                from job_hunter.collectors import email_alerts_collector
+
+                all_jobs.extend(email_alerts_collector.collect(s))
         except Exception as exc:  # noqa: BLE001 — une source qui casse ne bloque pas les autres
             logger.error(f"{src} : collecte échouée — {exc}")
             alerts.append(f"{src} : collecte échouée — {exc}")
@@ -238,7 +242,12 @@ def _source_stats(
     logical = {"france_travail": "france_travail", "apec_rss": "apec", "careers_site": "careers_sites"}
     counts: Counter = Counter()
     for job in all_jobs:
-        key = "jobspy" if job.source.startswith("jobspy") else logical.get(job.source, job.source)
+        if job.source.startswith("jobspy"):
+            key = "jobspy"
+        elif job.source.startswith("email_"):
+            key = "email_alerts"
+        else:
+            key = logical.get(job.source, job.source)
         counts[key] += 1
     errored = {src for src in selected if any(a.startswith(f"{src} :") for a in alerts)}
     return {src: (counts.get(src, 0), src not in errored) for src in selected}

@@ -41,6 +41,8 @@ jobs:
           FRANCE_TRAVAIL_CLIENT_ID: ${{ secrets.FRANCE_TRAVAIL_CLIENT_ID }}
           FRANCE_TRAVAIL_CLIENT_SECRET: ${{ secrets.FRANCE_TRAVAIL_CLIENT_SECRET }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          ALERTS_IMAP_USER: ${{ secrets.ALERTS_IMAP_USER }}
+          ALERTS_IMAP_PASSWORD: ${{ secrets.ALERTS_IMAP_PASSWORD }}
         run: |
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           uv run job-hunter run 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
