@@ -5,6 +5,7 @@ Ordre de marquage (acté) : les offres NOUVELLES ne sont marquées 'vues' qu'apr
 des offres déjà connues est mis à jour sans condition (inoffensif).
 """
 import json
+import os
 import sys
 from datetime import date
 
@@ -34,6 +35,8 @@ def _setup_logging(verbose: bool) -> None:
         sys.stderr,
         level="DEBUG" if verbose else "INFO",
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <7}</level> | {message}",
+        # GitHub Actions : pas de couleurs ANSI, sinon le Summary affiche « \x1b[32m… »
+        colorize=False if os.environ.get("GITHUB_ACTIONS") else None,
     )
 
 
