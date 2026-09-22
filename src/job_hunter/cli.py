@@ -157,6 +157,12 @@ def run(
         logger.info(f"filtre contrat : {len(all_jobs) - len(kept)} offre(s) non-CDI écartée(s)")
     all_jobs = kept
 
+    # --- Filtre domaine : écarte les métiers hors IT (CVC, BTP, HSE, marketing…) ---
+    kept = [j for j in all_jobs if not base.is_off_domain(j)]
+    if len(all_jobs) - len(kept):
+        logger.info(f"filtre domaine : {len(all_jobs) - len(kept)} offre(s) hors IT écartée(s)")
+    all_jobs = kept
+
     # --- Dédup (les nouveautés ne sont PAS encore marquées : cf. docstring) ---
     db = SeenJobsDB(s.db_path)
     today = date.today()
@@ -197,6 +203,7 @@ def run(
 
             writer = SheetWriter(s)
             appended = writer.append_offers(retained, today)
+            writer.archive_stale_offers(today, s.archive_after_days)
             touched = {
                 emp.name
                 for sj in retained

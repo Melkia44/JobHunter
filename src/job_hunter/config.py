@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     min_score: int = 65
     min_score_tier1: int = 58  # filet tier-1 — relevé 50→58 le 05/07 (Sales Manager Manitou passaient à 52-55)
 
+    # Offres restées « Nouvelle » au-delà de ce délai → « Archivée » (souvent expirées)
+    archive_after_days: int = 30
+
     # Chemins (ancrés à la racine du repo)
     db_path: Path = _REPO_ROOT / "data" / "seen_jobs.db"
     service_account_path: Path = _REPO_ROOT / "secrets" / "service_account.json"
