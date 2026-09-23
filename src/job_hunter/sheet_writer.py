@@ -32,6 +32,7 @@ SOURCE_ROW_LABELS = {
     "france_travail": "France Travail",
     "apec": "APEC (RSS)",
     "careers_sites": "Sites carrières",
+    "email_alerts": "Alertes mail (LinkedIn / Hellowork / Indeed)",
 }
 
 SOURCE_LABELS = {
@@ -41,6 +42,9 @@ SOURCE_LABELS = {
     "jobspy_linkedin": "LinkedIn",
     "france_travail": "France Travail",
     "apec_rss": "APEC",
+    "email_linkedin": "LinkedIn (alerte)",
+    "email_hellowork": "Hellowork (alerte)",
+    "email_indeed": "Indeed (alerte)",
 }
 
 PIPELINE_STATUSES = [
@@ -227,7 +231,7 @@ class SheetWriter:
         gardent leur ligne, et 'Dernier run complet' n'avance que si la source est OK.
         Jamais bloquant : un souci ici (onglet absent…) ne casse pas l'écriture principale."""
         try:
-            order = ["jobspy", "france_travail", "apec", "careers_sites"]
+            order = ["jobspy", "france_travail", "apec", "careers_sites", "email_alerts"]
             existing = {r[0]: r for r in self._read(f"'{TAB_SOURCES}'!A2:D10") if r}
             rows: list[list] = []
             for key in order:

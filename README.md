@@ -68,6 +68,8 @@ Repo → Settings → Secrets and variables → Actions :
 | `FRANCE_TRAVAIL_CLIENT_ID` | Client ID francetravail.io |
 | `FRANCE_TRAVAIL_CLIENT_SECRET` | Client Secret |
 | `SPREADSHEET_ID` | ID du Sheet cible |
+| `ALERTS_IMAP_USER` | Boîte dédiée aux alertes mail (LinkedIn, Hellowork, Indeed) |
+| `ALERTS_IMAP_PASSWORD` | Mot de passe d'application Google de cette boîte |
 
 Vérifier aussi Settings → Actions → General → Workflow permissions =
 **Read and write** (le workflow commit `data/seen_jobs.db` après chaque run).

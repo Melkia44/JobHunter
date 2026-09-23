@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     min_score: int = 65
     min_score_tier1: int = 58  # filet tier-1 — relevé 50→58 le 05/07 (Sales Manager Manitou passaient à 52-55)
 
+    # Alertes mail (boîte dédiée, IMAP + mot de passe d'application) — vides = source skippée
+    alerts_imap_user: str = ""
+    alerts_imap_password: str = ""
+    alerts_lookback_days: int = 3
+
     # Offres restées « Nouvelle » au-delà de ce délai → « Archivée » (souvent expirées)
     archive_after_days: int = 30
 

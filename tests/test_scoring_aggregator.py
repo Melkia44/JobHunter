@@ -46,9 +46,17 @@ def test_tier1_floor_as_safety_net(make_job, employers):
     assert scored.match_reason.startswith("P1 cible")
 
 
-def test_perfect_title_alone_is_not_enough(make_job, employers):
-    """Sans description ni tier, le titre parfait ne passe pas 65 (garde-fou domaine)."""
+def test_sans_description_titre_parfait_passe(make_job, employers):
+    """Sans description (alerte mail), le score est renormalisé sur titre/lieu/employeur :
+    un SDM à Nantes passe (il plafonnait à 59 avant le 22/09/2026). Le garde-fou domaine
+    est désormais assuré par base.is_off_domain, plus par le scoring."""
     job = make_job(company="ESN Quelconque")
     scored = aggregator.score_job(job, employers, TARGETS)
-    assert scored.score == pytest.approx(59.25, abs=0.1)
+    assert scored.score == pytest.approx(89.5, abs=0.1)  # .55×100 + .30×90 + .15×50
+    assert aggregator.passes_threshold(scored, 65, 50)
+
+
+def test_sans_description_titre_eloigne_ne_passe_pas(make_job, employers):
+    job = make_job(title="Comptable fournisseurs", company="ESN Quelconque")
+    scored = aggregator.score_job(job, employers, TARGETS)
     assert not aggregator.passes_threshold(scored, 65, 50)

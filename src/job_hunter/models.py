@@ -12,6 +12,9 @@ Source = Literal[
     "france_travail",
     "apec_rss",
     "careers_site",
+    "email_linkedin",
+    "email_hellowork",
+    "email_indeed",
 ]
 
 

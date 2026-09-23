@@ -1,10 +1,17 @@
-"""Sous-score titre : substring (100) puis fuzzy difflib sur les titres cibles."""
+"""Sous-score titre : substring pondéré par la priorité du poste, puis fuzzy difflib.
+
+Priorité de Mathieu (22/09/2026) : SDM > Product Manager > Data Engineer > Chef de projet IT.
+Le score d'un titre = poids du titre cible le mieux placé qu'il contient (substring),
+sinon ratio fuzzy × poids. Les intitulés ambigus (GATED_TARGETS : « chef de projet »,
+« service manager », « responsable de production »…) sans marqueur IT sont plafonnés plus bas : c'est la description, quand elle existe, qui tranche.
+"""
 from difflib import SequenceMatcher
 from pathlib import Path
 
 import yaml
 from loguru import logger
 
+from job_hunter.collectors.base import _IT_MARKER_RE
 from job_hunter.normalizer import normalize
 
 # Fallback si data/target_titles.yaml est vide/illisible. "chef de projet" couvre
@@ -20,7 +27,70 @@ DEFAULT_TARGET_TITLES = [
     "product manager",
     "product owner",
     "data engineer",
+    "chef de projet delivery",
+    # Élargissement 23/09/2026 : synonymes du métier SDM / run / ITSM
+    "service delivery",
+    "delivery lead",
+    "service owner",
+    "service manager",
+    "responsable mco",
+    "responsable run",
+    "incident manager",
+    "problem manager",
+    "itsm",
+    "technical account manager",
+    "responsable de production",
+    "responsable production",
+    "responsable d'exploitation",
+    "responsable exploitation",
+    "contract manager",
+    "customer success manager",
 ]
+
+# Poids par titre cible normalisé (absent = 100). Modifier ici pour changer les priorités.
+TITLE_WEIGHTS: dict[str, float] = {
+    "service delivery manager": 100,
+    "delivery manager": 100,
+    "sdm": 100,
+    "responsable operations services": 100,
+    "operations services": 100,
+    "product manager": 90,
+    "product owner": 90,
+    "chef de projet delivery": 90,
+    "data engineer": 85,
+    "chef de projet": 75,  # avec marqueur IT ; sinon CHEF_DE_PROJET_GENERIC
+    "pmo": 75,
+    "service delivery": 100,
+    "delivery lead": 95,
+    "service owner": 95,
+    "service manager": 95,  # gated
+    "responsable mco": 95,
+    "responsable run": 95,
+    "incident manager": 85,
+    "problem manager": 80,
+    "itsm": 85,
+    "technical account manager": 85,
+    "responsable de production": 90,  # gated
+    "responsable production": 90,  # gated
+    "responsable d'exploitation": 90,  # gated
+    "responsable exploitation": 90,  # gated
+    "contract manager": 80,  # gated
+    "customer success manager": 70,  # gated
+}
+CHEF_DE_PROJET_GENERIC = 60
+
+# Intitulés ambigus hors IT (industrie, logistique, service client, juridique…) :
+# sans marqueur IT dans le titre, plafonnés à CHEF_DE_PROJET_GENERIC.
+GATED_TARGETS = {
+    "chef de projet",
+    "service manager",
+    "responsable de production",
+    "responsable production",
+    "responsable d'exploitation",
+    "responsable exploitation",
+    "contract manager",
+    "customer success manager",
+}
 
 
 def load_target_titles(path: Path) -> list[str]:
@@ -37,10 +107,17 @@ def load_target_titles(path: Path) -> list[str]:
     return titles
 
 
+def _weight(target: str, title_norm: str) -> float:
+    w = TITLE_WEIGHTS.get(target, 100)
+    if target in GATED_TARGETS and not _IT_MARKER_RE.search(title_norm):
+        return CHEF_DE_PROJET_GENERIC
+    return w
+
+
 def score_title_match(title: str, targets: list[str]) -> float:
     title_norm = normalize(title)
-    for target in targets:
-        if target in title_norm:
-            return 100.0
-    best = max(SequenceMatcher(None, title_norm, t).ratio() for t in targets)
-    return round(best * 100, 1)
+    hits = [_weight(t, title_norm) for t in targets if t in title_norm]
+    if hits:
+        return float(max(hits))
+    best = max(SequenceMatcher(None, title_norm, t).ratio() * _weight(t, title_norm) for t in targets)
+    return round(best, 1)

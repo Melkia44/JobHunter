@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '30 8 * * *'  # 09:30 Paris (hiver) / 10:30 (été) — horaire flottant assumé
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Test à blanc : alertes mail uniquement, aucune écriture (ni Sheet, ni DB dédup)"
+        type: boolean
+        default: false
 
 concurrency:
   group: daily-run
@@ -41,12 +46,20 @@ jobs:
           FRANCE_TRAVAIL_CLIENT_ID: ${{ secrets.FRANCE_TRAVAIL_CLIENT_ID }}
           FRANCE_TRAVAIL_CLIENT_SECRET: ${{ secrets.FRANCE_TRAVAIL_CLIENT_SECRET }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          ALERTS_IMAP_USER: ${{ secrets.ALERTS_IMAP_USER }}
+          ALERTS_IMAP_PASSWORD: ${{ secrets.ALERTS_IMAP_PASSWORD }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
+          ARGS=()
+          if [ "$DRY_RUN" = "true" ]; then ARGS=(--dry-run --sources email_alerts); fi
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          uv run job-hunter run 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          uv run job-hunter run "${ARGS[@]}" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Commit updated dedup DB
+        # Jamais en test à blanc, et jamais depuis une autre branche que main
+        # (sinon « git push origin HEAD:main » pousserait la branche sur main).
+        if: ${{ !inputs.dry_run && github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
