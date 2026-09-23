@@ -119,5 +119,10 @@ def score_title_match(title: str, targets: list[str]) -> float:
     hits = [_weight(t, title_norm) for t in targets if t in title_norm]
     if hits:
         return float(max(hits))
-    best = max(SequenceMatcher(None, title_norm, t).ratio() * _weight(t, title_norm) for t in targets)
+    # Fuzzy sans marqueur IT plafonné comme les intitulés ambigus : « Responsable brasserie »
+    # (≈ « responsable run ») ou « Responsable de magasin » montaient à 67-74 (run #90, 23/09/2026).
+    cap = 100 if _IT_MARKER_RE.search(title_norm) else CHEF_DE_PROJET_GENERIC
+    best = max(
+        SequenceMatcher(None, title_norm, t).ratio() * min(_weight(t, title_norm), cap) for t in targets
+    )
     return round(best, 1)
