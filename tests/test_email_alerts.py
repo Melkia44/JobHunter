@@ -94,3 +94,19 @@ def test_hellowork_lien_tracking_decode_en_url_canonique():
     assert _hw_canonical_url(href) == "https://www.hellowork.com/fr-fr/emplois/71724082.html"
     # Format inattendu → lien d'origine, jamais d'exception
     assert _hw_canonical_url("https://emails.hellowork.com/clic/x/0") == "https://emails.hellowork.com/clic/x/0"
+
+
+def test_hellowork_meme_titre_deux_employeurs_deux_liens():
+    """Deux cartes au même intitulé → deux offres, chacune avec son propre lien."""
+    from job_hunter.collectors.email_alerts_collector import parse_hellowork
+
+    def card(company, n):
+        return (f'<p><a href="https://emails.hellowork.com/clic/x/{n}">Chef de projet informatique H/F</a></p>'
+                f"<p>{company}</p><p>Nantes - 44</p><p>CDI</p>"
+                f'<p><a href="https://emails.hellowork.com/clic/x/v{n}">Voir l’offre</a></p>')
+
+    jobs = parse_hellowork(f"<html><body>{card('ESN Alpha', 1)}{card('ESN Beta', 2)}</body></html>", None)
+    assert [(j.company, j.url) for j in jobs] == [
+        ("ESN Alpha", "https://emails.hellowork.com/clic/x/1"),
+        ("ESN Beta", "https://emails.hellowork.com/clic/x/2"),
+    ]
