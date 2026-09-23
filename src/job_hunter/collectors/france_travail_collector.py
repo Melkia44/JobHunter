@@ -20,7 +20,7 @@ SCOPE = "api_offresdemploiv2 o2dsoffre"
 
 # MOA/PMO, support-SDM, études & dev (PO tech / DE), data engineering.
 # Écartés : M1803 (DSI, trop senior), M1808 (réseau/infra), E1105 (édition de livres).
-ROME_CODES = "M1806,M1802,M1805,M1811"
+ROME_CODES = "M1806,M1802,M1805,M1811,M1810"  # + M1810 prod/exploitation SI (23/09/2026)
 COMMUNE_NANTES = "44109"
 DISTANCE_KM = 50
 PUBLIEE_DEPUIS = 3   # 72 h : couvre un run raté ; la dédup (Phase 3) absorbe les répétitions

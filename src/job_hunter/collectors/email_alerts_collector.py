@@ -16,6 +16,8 @@ Non couverts volontairement :
   (SAV sécurité incendie, M&A…). Seules les alertes (jobalert.indeed.com) sont lues.
 - Annonces sponsorisées Indeed (liens /pagead/) : pas d'identifiant d'offre stable.
 """
+import base64
+import binascii
 import email
 import imaplib
 import re
@@ -186,12 +188,31 @@ def parse_hellowork(html: str, posted: date | None) -> list[RawJob]:
         if key in seen:
             continue
         seen.add(key)
-        url = title_links[title]
+        url = _hw_canonical_url(title_links[title])
         jobs.append(
             _job("email_hellowork", f"{company}|{title}|{location}", title, company, location, url,
                  posted, contract=contract, smin=smin, smax=smax)
         )
     return jobs
+
+
+_HW_OFFER_RE = re.compile(r"https://www\.hellowork\.com/fr-fr/emplois/\d+\.html")
+
+
+def _hw_canonical_url(href: str) -> str:
+    """Lien de tracking Hellowork → URL de l'offre, sans tracking.
+
+    Format : .../clic/<id>/<n>/<hash>/<base64 url-safe de « email🪢URL?utm_… »>. Le lien
+    change à chaque mail (et embarque l'adresse du destinataire) : inutilisable comme clé
+    de dédup Sheet. Décodage impossible → lien d'origine (jamais bloquant).
+    """
+    token = href.rstrip("/").rsplit("/", 1)[-1]
+    try:
+        decoded = base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)).decode("utf-8", "replace")
+    except (binascii.Error, ValueError):
+        return href
+    m = _HW_OFFER_RE.search(decoded)
+    return m.group(0) if m else href
 
 
 def _hw_salary(s: str) -> tuple[int | None, int | None]:
