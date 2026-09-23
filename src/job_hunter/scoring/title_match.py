@@ -45,6 +45,7 @@ DEFAULT_TARGET_TITLES = [
     "responsable exploitation",
     "contract manager",
     "customer success manager",
+    "project manager",
 ]
 
 # Poids par titre cible normalisé (absent = 100). Modifier ici pour changer les priorités.
@@ -76,6 +77,7 @@ TITLE_WEIGHTS: dict[str, float] = {
     "responsable exploitation": 90,  # gated
     "contract manager": 80,  # gated
     "customer success manager": 70,  # gated
+    "project manager": 75,  # gated, comme « chef de projet »
 }
 CHEF_DE_PROJET_GENERIC = 60
 
@@ -90,6 +92,7 @@ GATED_TARGETS = {
     "responsable exploitation",
     "contract manager",
     "customer success manager",
+    "project manager",
 }
 
 
