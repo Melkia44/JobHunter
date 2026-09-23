@@ -62,3 +62,11 @@ def test_synonymes_ambigus_plafonnes_hors_it():
     assert score_title_match("Responsable d'exploitation transport", TARGETS) == 60
     assert score_title_match("Customer Service Manager", TARGETS) == 60
     assert score_title_match("Contract Manager juridique", TARGETS) == 60
+
+
+def test_fuzzy_hors_it_plafonne():
+    """Run #90 : intitulés retail/restauration remontés par le fuzzy (≈ « responsable run »)."""
+    for t in ("RESPONSABLE BRASSERIE - H/F", "Responsable de magasin (H/F)", "Manager H/F"):
+        assert score_title_match(t, TARGETS) <= 60, t
+    # « applicatif » est un marqueur IT : le fuzzy n'est pas plafonné
+    assert score_title_match("Responsable applicatif H/F", TARGETS) > 60
