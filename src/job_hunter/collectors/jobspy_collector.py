@@ -19,9 +19,8 @@ QUERIES: list[tuple[str, str]] = [
     ("PMO", "Nantes, France"),
     ("Product Manager", "Nantes, France"),
     ("Data Engineer", "Nantes, France"),
-    # Élargissement 23/09/2026 : synonymes SDM / run (le scoring filtre les hors-IT)
-    ("Service Manager", "Nantes, France"),
-    ("Delivery Manager", "Nantes, France"),
+    # Élargissement 23/09/2026. « Service Manager » / « Delivery Manager » retirés le même
+    # jour : sur Indeed = managers retail/restauration (run #90). Couverts par les alertes mail.
     ("Responsable production informatique", "Nantes, France"),
 ]
 

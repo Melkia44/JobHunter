@@ -55,7 +55,7 @@ _IT_MARKER_RE = re.compile(
     r"\b("
     r"it|si|sirh|informati\w*|numerique|transformation digitale|data|big data|erp|crm|sap|"
     r"moe|moa|amoa|cyber\w*|systemes?|reseaux?|telecoms?|logiciels?|software|developpeur|"
-    r"developer|angular|cloud|devops|product owner|business analyst|e-commerce"
+    r"developer|angular|cloud|devops|product owner|business analyst|e-commerce|applicati\w*"
     r")\b"
 )
 
