@@ -19,13 +19,13 @@ permissions:
 
 jobs:
   hunt:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # figé : ubuntu-latest bascule sur Ubuntu 26 le 19/10/2026
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6  # Node 24 (Node 20 déprécié)
 
       - name: Setup uv (Python 3.13)
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7  # 1re version Node 24
         with:
           python-version: '3.13'  # aligné sur .python-version (acté 04/07/2026)
 
@@ -59,7 +59,9 @@ jobs:
       - name: Commit updated dedup DB
         # Jamais en test à blanc, et jamais depuis une autre branche que main
         # (sinon « git push origin HEAD:main » pousserait la branche sur main).
-        if: ${{ !inputs.dry_run && github.ref == 'refs/heads/main' }}
+        # always() : le run échoue exprès quand une source tombe, mais les offres
+        # des autres sources sont déjà dans la Sheet → la DB dédup doit suivre.
+        if: ${{ always() && !inputs.dry_run && github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
