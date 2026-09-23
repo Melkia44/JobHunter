@@ -595,11 +595,17 @@ def enrich_descriptions(jobs: list[RawJob]) -> None:
             try:
                 if urlparse(job.url).netloc == "jobs.smartrecruiters.com":
                     job.description = _fetch_sr_description(client, job.url)
+                    if not job.location and job.description:
+                        job.location = _extract_location(job.description)
                 else:
-                    job.description = _fetch_page_text(client, job.url)
+                    resp = client.get(job.url)
+                    resp.raise_for_status()
+                    job.description, lieu = _page_text_and_location(resp.text)
+                    if not job.location:
+                        job.location = _zone_tagged(lieu) if lieu else (
+                            _extract_location(job.description) if job.description else ""
+                        )
                 enriched += job.description is not None
-                if not job.location and job.description:
-                    job.location = _extract_location(job.description)
             except Exception as exc:  # noqa: BLE001
                 logger.debug(f"careers_site : description non récupérée ({job.url}) — {exc}")
             time.sleep(1.0)
@@ -607,14 +613,45 @@ def enrich_descriptions(jobs: list[RawJob]) -> None:
         logger.info(f"careers_site : {enriched}/{len(jobs)} descriptions enrichies")
 
 
-def _fetch_page_text(client: httpx.Client, url: str) -> str | None:
-    """Texte brut du contenu principal d'une page détail SSR : suffisant pour du
-    scoring par regex, le bruit résiduel (nav/cookies) est marginal et borné."""
-    resp = client.get(url)
-    resp.raise_for_status()
-    tree = HTMLParser(resp.text)
+def _page_text_and_location(html: str) -> tuple[str | None, str]:
+    """Page détail SSR → (texte du contenu principal, lieu du champ « Lieu »).
+
+    Texte : suffisant pour du scoring par regex, bruit résiduel (nav/cookies) borné.
+    Lieu : valeur du champ libellé « Lieu » / « Localisation » (fiches Cegid : titre
+    « Lieu » puis la ville). Sans ce champ, le scan « nantes » du texte entier trouvait
+    le mot dans le menu/les filtres → les offres Arkéa de Brest ressortaient à Nantes
+    (7/7 au 23/09/2026)."""
+    tree = HTMLParser(html)
     node = tree.css_first("main") or tree.css_first("article") or tree.body
-    return node.text(separator=" ", strip=True)[:20000] if node else None
+    text = node.text(separator=" ", strip=True)[:20000] if node else None
+    return text, _labeled_location(tree)
+
+
+_LIEU_LABELS = {"lieu", "lieu :", "lieu de travail", "localisation", "localisation :", "ville"}
+
+
+def _labeled_location(tree: HTMLParser) -> str:
+    """Valeur qui suit un libellé « Lieu » : texte de l'élément frère suivant. Rien → ''."""
+    for el in tree.css("h1, h2, h3, h4, h5, dt, th, strong, b, span, label, p, div"):
+        if " ".join(el.text(strip=True).split()).lower() not in _LIEU_LABELS:
+            continue
+        sib = el.next
+        while sib is not None and (sib.tag == "-text" and not sib.text(strip=True)):
+            sib = sib.next
+        if sib is not None:
+            val = " ".join(sib.text(separator=" ", strip=True).split())
+            if 1 < len(val) <= 80:
+                return val
+    return ""
+
+
+def _zone_tagged(lieu: str) -> str:
+    """Lieu explicite de la page : conservé tel quel s'il est dans la zone (gazetteer
+    du scorer), sinon suffixé « (hors zone) » — le scorer le note alors 30 au lieu du
+    75 accordé par défaut aux sources géo-filtrées (Cegid liste le national)."""
+    from job_hunter.scoring.location import is_known_zone  # import local : pas de cycle
+
+    return lieu if is_known_zone(lieu) else f"{lieu} (hors zone)"
 
 
 def _fetch_sr_description(client: httpx.Client, url: str) -> str | None:
