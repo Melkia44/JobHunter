@@ -158,6 +158,13 @@ def run(
             logger.error(f"{src} : collecte échouée — {exc}")
             alerts.append(f"{src} : collecte échouée — {exc}")
 
+    # --- Panne silencieuse : une source sans erreur mais à 0 offre (secret absent,
+    # gabarit de mail changé, site refondu…). Incident du 23/09/2026 : IMAP cassé,
+    # run vert, « Aucune offre retenue » — rien ne le signalait.
+    for src in _silent_zero_sources(all_jobs, alerts, selected):
+        logger.warning(f"{src} : 0 offre collectée — source probablement en panne")
+        alerts.append(f"{src} : 0 offre collectée — source probablement en panne")
+
     # --- Filtre contrat : CDI uniquement (écarte CDD, stage, alternance, intérim…) ---
     kept = [j for j in all_jobs if not base.is_excluded_contract(j)]
     if len(all_jobs) - len(kept):
@@ -232,6 +239,15 @@ def run(
     db.close()
 
     report(len(all_jobs), dups, len(new_scored), retained, threshold, s.min_score_tier1, appended, dry_run, alerts)
+    if alerts:
+        # Run en échec APRÈS écriture Sheet : GitHub notifie (mail), les offres des
+        # sources saines sont déjà livrées.
+        raise typer.Exit(code=1)
+
+
+def _silent_zero_sources(all_jobs: list[RawJob], alerts: list[str], selected: list[str]) -> list[str]:
+    """Sources sans erreur levée mais sans aucune offre collectée."""
+    return [src for src, (count, ok) in _source_stats(all_jobs, alerts, selected).items() if ok and count == 0]
 
 
 def _source_stats(
