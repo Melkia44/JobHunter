@@ -2,8 +2,8 @@
 
 Priorité de Mathieu (22/09/2026) : SDM > Product Manager > Data Engineer > Chef de projet IT.
 Le score d'un titre = poids du titre cible le mieux placé qu'il contient (substring),
-sinon ratio fuzzy × poids. « chef de projet » sans marqueur IT (« Chef de projet H/F »)
-est plafonné plus bas : c'est la description, quand elle existe, qui tranche.
+sinon ratio fuzzy × poids. Les intitulés ambigus (GATED_TARGETS : « chef de projet »,
+« service manager », « responsable de production »…) sans marqueur IT sont plafonnés plus bas : c'est la description, quand elle existe, qui tranche.
 """
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -28,6 +28,23 @@ DEFAULT_TARGET_TITLES = [
     "product owner",
     "data engineer",
     "chef de projet delivery",
+    # Élargissement 23/09/2026 : synonymes du métier SDM / run / ITSM
+    "service delivery",
+    "delivery lead",
+    "service owner",
+    "service manager",
+    "responsable mco",
+    "responsable run",
+    "incident manager",
+    "problem manager",
+    "itsm",
+    "technical account manager",
+    "responsable de production",
+    "responsable production",
+    "responsable d'exploitation",
+    "responsable exploitation",
+    "contract manager",
+    "customer success manager",
 ]
 
 # Poids par titre cible normalisé (absent = 100). Modifier ici pour changer les priorités.
@@ -43,8 +60,37 @@ TITLE_WEIGHTS: dict[str, float] = {
     "data engineer": 85,
     "chef de projet": 75,  # avec marqueur IT ; sinon CHEF_DE_PROJET_GENERIC
     "pmo": 75,
+    "service delivery": 100,
+    "delivery lead": 95,
+    "service owner": 95,
+    "service manager": 95,  # gated
+    "responsable mco": 95,
+    "responsable run": 95,
+    "incident manager": 85,
+    "problem manager": 80,
+    "itsm": 85,
+    "technical account manager": 85,
+    "responsable de production": 90,  # gated
+    "responsable production": 90,  # gated
+    "responsable d'exploitation": 90,  # gated
+    "responsable exploitation": 90,  # gated
+    "contract manager": 80,  # gated
+    "customer success manager": 70,  # gated
 }
 CHEF_DE_PROJET_GENERIC = 60
+
+# Intitulés ambigus hors IT (industrie, logistique, service client, juridique…) :
+# sans marqueur IT dans le titre, plafonnés à CHEF_DE_PROJET_GENERIC.
+GATED_TARGETS = {
+    "chef de projet",
+    "service manager",
+    "responsable de production",
+    "responsable production",
+    "responsable d'exploitation",
+    "responsable exploitation",
+    "contract manager",
+    "customer success manager",
+}
 
 
 def load_target_titles(path: Path) -> list[str]:
@@ -63,7 +109,7 @@ def load_target_titles(path: Path) -> list[str]:
 
 def _weight(target: str, title_norm: str) -> float:
     w = TITLE_WEIGHTS.get(target, 100)
-    if target == "chef de projet" and not _IT_MARKER_RE.search(title_norm):
+    if target in GATED_TARGETS and not _IT_MARKER_RE.search(title_norm):
         return CHEF_DE_PROJET_GENERIC
     return w
 
