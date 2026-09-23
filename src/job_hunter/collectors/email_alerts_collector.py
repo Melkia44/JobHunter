@@ -52,7 +52,11 @@ def collect(settings: Settings) -> list[RawJob]:
     n_mails = 0
     imap = imaplib.IMAP4_SSL(IMAP_HOST)
     try:
-        imap.login(settings.alerts_imap_user, settings.alerts_imap_password)
+        # Secrets colles dans GitHub = souvent un \n final -> imaplib refuse (CR/LF).
+        # Le mot de passe applicatif Gmail s affiche aussi avec des espaces.
+        user = settings.alerts_imap_user.strip()
+        pwd = "".join(settings.alerts_imap_password.split())
+        imap.login(user, pwd)
         imap.select("INBOX", readonly=True)
         for sender in SENDERS:
             typ, data = imap.search(None, "SINCE", since, "FROM", f'"{sender}"')
