@@ -149,12 +149,15 @@ _HW_SALARY_RE = re.compile(r"([\d\s  ]+)\s*-\s*([\d\s  ]+)\s*€\s*/\s*an")
 
 def parse_hellowork(html: str, posted: date | None) -> list[RawJob]:
     tree = HTMLParser(html)
-    title_links = {}
+    # Liens de titre dans l'ordre du document, par intitulé : deux cartes au même titre
+    # (« Chef de projet informatique » chez deux ESN) gardent chacune leur lien.
+    title_links: dict[str, list[str]] = {}
     for a in tree.css("a"):
         txt = " ".join(a.text(separator=" ").split())
         href = a.attributes.get("href") or ""
         if "/clic/" in href and txt and not txt.lower().startswith("voir "):
-            title_links.setdefault(txt, href)
+            title_links.setdefault(txt, []).append(href)
+    link_idx: dict[str, int] = {}
 
     body = tree.body.text(separator="\n") if tree.body else ""
     lines = [" ".join(ln.split()) for ln in body.split("\n") if ln.strip()]
@@ -166,6 +169,10 @@ def parse_hellowork(html: str, posted: date | None) -> list[RawJob]:
         if title not in title_links:
             i += 1
             continue
+        # Lien de la n-ième occurrence du titre (consommé avant tout « continue »)
+        k = link_idx.get(title, 0)
+        link_idx[title] = k + 1
+        href = title_links[title][min(k, len(title_links[title]) - 1)]
         # Fenêtre de la carte : jusqu'au prochain « Voir l’offre »
         j = i + 1
         card: list[str] = []
@@ -188,7 +195,7 @@ def parse_hellowork(html: str, posted: date | None) -> list[RawJob]:
         if key in seen:
             continue
         seen.add(key)
-        url = _hw_canonical_url(title_links[title])
+        url = _hw_canonical_url(href)
         jobs.append(
             _job("email_hellowork", f"{company}|{title}|{location}", title, company, location, url,
                  posted, contract=contract, smin=smin, smax=smax)
