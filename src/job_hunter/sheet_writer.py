@@ -13,8 +13,9 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from loguru import logger
 
+from job_hunter.collectors.base import is_excluded_contract, is_off_domain
 from job_hunter.config import Settings
-from job_hunter.models import Employer, ScoredJob
+from job_hunter.models import Employer, RawJob, ScoredJob
 from job_hunter.normalizer import canonical_company, canonical_title, normalize
 from job_hunter.scoring.tier import find_employer
 
@@ -53,6 +54,9 @@ PIPELINE_STATUSES = [
 ]
 
 _TIER_SUFFIX_RE = re.compile(r"\s*\(p[1-3]\)$")
+
+# Colonne M de l'onglet Offres : pourquoi l'outil a archivé la ligne (traçabilité)
+REASON_HEADER = "Motif archivage"
 
 
 class SheetWriter:
@@ -122,14 +126,39 @@ class SheetWriter:
             rows = self._read(f"'{TAB_OFFERS}'!A2:K")
             idx = stale_rows(rows, today, days)
             if idx:
-                self._batch_update(
-                    [{"range": f"'{TAB_OFFERS}'!K{i + 2}", "values": [["Archivée"]]} for i in idx]
-                )
+                self._archive([(i, f"Plus de {days} j sans suite") for i in idx])
             logger.info(f"Sheet : {len(idx)} offre(s) « Nouvelle » de plus de {days} j archivée(s)")
             return len(idx)
         except Exception as exc:  # noqa: BLE001 — nettoyage non critique
             logger.warning(f"Archivage des offres anciennes non effectué : {exc}")
             return 0
+
+    def revalidate_offers(self) -> int:
+        """Repasse sur les lignes « Nouvelle » avec les règles actuelles et archive,
+        motif en colonne M : doublon, contrat hors CDI, métier hors IT, lieu hors zone.
+        Ne supprime jamais, ne touche jamais une ligne au statut modifié à la main.
+        Jamais bloquant."""
+        try:
+            rows = self._read(f"'{TAB_OFFERS}'!A2:K")
+            found = revalidate_rows(rows)
+            if found:
+                self._archive(found)
+            logger.info(f"Sheet : {len(found)} offre(s) « Nouvelle » archivée(s) à la revalidation")
+            return len(found)
+        except Exception as exc:  # noqa: BLE001 — nettoyage non critique
+            logger.warning(f"Revalidation des offres non effectuée : {exc}")
+            return 0
+
+    def _archive(self, items: list[tuple[int, str]]) -> None:
+        """items = (index 0-based relatif à A2, motif) → K « Archivée » + M motif."""
+        head = self._read(f"'{TAB_OFFERS}'!M1:M1")
+        data = [] if head and head[0] else [
+            {"range": f"'{TAB_OFFERS}'!M1", "values": [[REASON_HEADER]]}
+        ]
+        for i, reason in items:
+            data.append({"range": f"'{TAB_OFFERS}'!K{i + 2}", "values": [["Archivée"]]})
+            data.append({"range": f"'{TAB_OFFERS}'!M{i + 2}", "values": [[reason]]})
+        self._batch_update(data)
 
     # --- Onglet 'Cibles employeurs' -------------------------------------------
 
@@ -345,3 +374,47 @@ def _source_label(source: str, company: str) -> str:
     if source == "careers_site":
         return f"Site officiel {company}"
     return SOURCE_LABELS.get(source, source)
+
+
+def revalidate_rows(rows: list[list[str]]) -> list[tuple[int, str]]:
+    """(index 0-based relatif à rows, motif) des lignes « Nouvelle » à archiver.
+    rows = A2:K de l'onglet Offres (B employeur, C intitulé, D lieu, E contrat,
+    H lien, K statut). Règles sûres uniquement — le score complet n'est pas rejoué :
+    la Sheet ne garde pas la description qui a fait retenir certaines offres.
+    Doublon = même lien ou même (employeur, intitulé) canoniques qu'une ligne PLUS
+    HAUTE non archivée (la première occurrence active est gardée ; une ligne archivée
+    ne sert jamais de référence, sinon les deux exemplaires finiraient archivés)."""
+    out: list[tuple[int, str]] = []
+    seen_urls: dict[str, int] = {}
+    seen_pairs: dict[tuple[str, str], int] = {}
+    for i, row in enumerate(rows):
+        cell = lambda c: row[c].strip() if len(row) > c else ""  # noqa: E731
+        url, title = cell(7), cell(2)
+        pair = (canonical_company(_clean_employer(cell(1))), canonical_title(title))
+        first = seen_urls.get(url) if url else None
+        if first is None and title:
+            first = seen_pairs.get(pair)
+        status = normalize(cell(10))
+        if status != "nouvelle" or not title:
+            if status and status != "archivee":  # suivie à la main : référence
+                if url:
+                    seen_urls.setdefault(url, i)
+                seen_pairs.setdefault(pair, i)
+            continue
+        if first is not None:
+            out.append((i, f"Doublon de la ligne {first + 2}"))
+            continue
+        if url:
+            seen_urls.setdefault(url, i)
+        seen_pairs.setdefault(pair, i)
+        contract = cell(4)
+        job = RawJob.model_construct(
+            title=title, contract_type=None if contract in ("", "n.c.") else contract
+        )
+        if is_excluded_contract(job):
+            out.append((i, "Contrat hors CDI"))
+        elif is_off_domain(job):
+            out.append((i, "Métier hors IT"))
+        elif "(hors zone)" in cell(3).lower():
+            out.append((i, "Lieu hors zone"))
+    return out

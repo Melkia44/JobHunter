@@ -211,6 +211,7 @@ def run(
 
             writer = SheetWriter(s)
             appended = writer.append_offers(retained, today)
+            writer.revalidate_offers()
             writer.archive_stale_offers(today, s.archive_after_days)
             touched = {
                 emp.name
