@@ -1,4 +1,5 @@
 """Parseurs d'alertes mail, testés sur de vrais mails anonymisés (tests/fixtures/alerts)."""
+import base64
 import email
 from datetime import date
 from email import policy
@@ -83,3 +84,13 @@ def test_fixtures_sans_donnees_personnelles(name):
     raw = (FIX / name).read_text(encoding="utf-8", errors="replace").lower()
     for marker in ("lowagie", "melkia", "otptoken", "midtoken", "trackingid"):
         assert marker not in raw
+
+
+def test_hellowork_lien_tracking_decode_en_url_canonique():
+    from job_hunter.collectors.email_alerts_collector import _hw_canonical_url
+    payload = "candidat@example.com\U0001FAA2https://www.hellowork.com/fr-fr/emplois/71724082.html?utm_source=jobalert&utm_medium=email"
+    token = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+    href = f"https://emails.hellowork.com/clic/8fea7697/6/39fb7030/{token}"
+    assert _hw_canonical_url(href) == "https://www.hellowork.com/fr-fr/emplois/71724082.html"
+    # Format inattendu → lien d'origine, jamais d'exception
+    assert _hw_canonical_url("https://emails.hellowork.com/clic/x/0") == "https://emails.hellowork.com/clic/x/0"

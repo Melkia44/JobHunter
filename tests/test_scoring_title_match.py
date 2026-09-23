@@ -46,3 +46,19 @@ def test_far_title_scores_low():
 def test_load_falls_back_when_missing(tmp_path):
     titles = load_target_titles(tmp_path / "absent.yaml")
     assert "chef de projet" in titles
+
+
+def test_synonymes_sdm_run_itsm():
+    assert score_title_match("IT Service Manager H/F", TARGETS) == 95
+    assert score_title_match("Service Owner ServiceNow", TARGETS) == 95
+    assert score_title_match("Responsable MCO / Run", TARGETS) == 95
+    assert score_title_match("Head of Service Delivery", TARGETS) == 100
+    assert score_title_match("Responsable de production informatique H/F", TARGETS) == 90
+
+
+def test_synonymes_ambigus_plafonnes_hors_it():
+    """Industrie, service client, juridique : pas un poste SDM sans marqueur IT."""
+    assert score_title_match("Responsable de production H/F", TARGETS) == 60
+    assert score_title_match("Responsable d'exploitation transport", TARGETS) == 60
+    assert score_title_match("Customer Service Manager", TARGETS) == 60
+    assert score_title_match("Contract Manager juridique", TARGETS) == 60
