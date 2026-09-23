@@ -15,7 +15,7 @@ from loguru import logger
 
 from job_hunter.config import Settings
 from job_hunter.models import Employer, ScoredJob
-from job_hunter.normalizer import normalize
+from job_hunter.normalizer import canonical_company, canonical_title, normalize
 from job_hunter.scoring.tier import find_employer
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -92,11 +92,13 @@ class SheetWriter:
         seen_rows = self._read(f"'{TAB_OFFERS}'!B2:H")
         existing_urls = {r[6].strip() for r in seen_rows if len(r) >= 7 and r[6].strip()}
         existing_pairs = {
-            (_clean_employer(r[0]), normalize(r[1])) for r in seen_rows if len(r) >= 2
+            (canonical_company(_clean_employer(r[0])), canonical_title(r[1]))
+            for r in seen_rows
+            if len(r) >= 2
         }
         rows: list[list] = []
         for sj in retained:
-            pair = (_clean_employer(sj.job.company), normalize(sj.job.title))
+            pair = (canonical_company(_clean_employer(sj.job.company)), canonical_title(sj.job.title))
             if sj.job.url in existing_urls or pair in existing_pairs:
                 continue
             rows.append(_offer_row(sj, today))

@@ -114,7 +114,7 @@ def run(
     """Run complet : collecte → dédup → scoring → Sheet → rapport."""
     from job_hunter.collectors.careers_sites_collector import enrich_descriptions, load_employers
     from job_hunter.dedup import SeenJobsDB
-    from job_hunter.normalizer import compute_fingerprint
+    from job_hunter.normalizer import compute_fingerprint, legacy_fingerprint
     from job_hunter.reporter import report
     from job_hunter.scoring import aggregator
     from job_hunter.scoring.tier import find_employer
@@ -177,7 +177,8 @@ def run(
     dups = 0
     for job in all_jobs:
         fp = compute_fingerprint(job.company, job.title)
-        if db.is_new(fp):
+        # v1 encore consultée : transition sans faire ressortir l'historique
+        if db.is_new(fp) and db.is_new(legacy_fingerprint(job.company, job.title)):
             new_jobs.append((fp, job))
         else:
             dups += 1
