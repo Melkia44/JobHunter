@@ -38,3 +38,30 @@ def test_mark_seen_updates_last_seen_without_duplicating(tmp_path, make_job):
     ).fetchone()
     assert row == (1, "2026-07-01", "2026-07-03")
     db.close()
+
+
+def test_doublons_sheet_du_23_09_meme_empreinte():
+    """Paires vues dans la Sheet le 23/09/2026 : mêmes offres, libellés différents."""
+    from job_hunter.normalizer import compute_fingerprint as fp
+
+    assert fp("Groupe SYD", "Chef de Projet Technique H/F") == fp("SYD GROUPE", "Chef de Projet Technique H/F")
+    assert fp("CONSORT Group", "Product Owner Senior H/F") == fp(
+        "CONSORT Group", "Product Owner Senior H/F Consortia - Testing, Développement, Data & IA · Nantes"
+    )
+    assert fp("Groupe SII (P2)", "Chef de Projet Delivery (F/H) – Nantes") == fp(
+        "Groupe SII", "Chef de Projet Delivery (F/H)"
+    )
+    assert fp("MANITOU GROUP (P1)", "Chef de Projets Senior (F/H)") == fp("MANITOU", "Chef de Projets Senior F/H")
+    # Offres réellement différentes : empreintes différentes
+    assert fp("CONSORT Group", "Product Owner Senior H/F") != fp("CONSORT Group", "Product Owner H/F")
+    assert fp("Groupe SYD", "Chef de Projet Technique H/F") != fp("Groupe SII", "Chef de Projet Technique H/F")
+
+
+def test_empreinte_v1_consultee_pour_la_transition(tmp_path, make_job):
+    from job_hunter.normalizer import legacy_fingerprint
+
+    db = SeenJobsDB(tmp_path / "seen.db")
+    job = make_job()
+    db.mark_seen(legacy_fingerprint(job.company, job.title), job, date(2026, 7, 1))
+    assert not db.is_new(legacy_fingerprint(job.company, job.title))
+    db.close()

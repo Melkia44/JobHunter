@@ -70,3 +70,10 @@ def test_fuzzy_hors_it_plafonne():
         assert score_title_match(t, TARGETS) <= 60, t
     # « applicatif » est un marqueur IT : le fuzzy n'est pas plafonné
     assert score_title_match("Responsable applicatif H/F", TARGETS) > 60
+
+
+def test_project_manager_comme_chef_de_projet():
+    """Michael Page « Project Manager H/F » (IT, 50-60 k€) écarté le 23/09 par le plafond fuzzy."""
+    assert score_title_match("Project Manager H/F", TARGETS) == 60  # sans marqueur IT : description tranche
+    assert score_title_match("IT Project Manager", TARGETS) == 75
+    assert score_title_match("Senior Project Manager Data", TARGETS) == 75
