@@ -24,7 +24,8 @@ _CONTRACT_EXCLUDED = {
     "saisonnier", "contract", "temporary", "internship", "apprenticeship", "vie",
 }
 _TITLE_EXCLUDED_RE = re.compile(
-    r"\b(stages?|stagiaires?|alternan\w+|apprenti\w*|int[eé]rims?|cdd)\b", re.IGNORECASE
+    r"\b(stages?|stagiaires?|alternan\w+|apprenti\w*|int[eé]rims?|cdd|freelances?)\b",
+    re.IGNORECASE,  # freelance : « PO … (IT) / Freelance » (lehibou) passait le 23/09/2026
 )
 
 
