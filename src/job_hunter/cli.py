@@ -245,6 +245,43 @@ def run(
         raise typer.Exit(code=1)
 
 
+@app.command()
+def implantations(
+    since: str | None = typer.Option(
+        None, "--since", help="Date de début AAAA-MM-JJ (défaut : aujourd'hui - lookback config)"
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Affiche les résultats sans écrire le Sheet"),
+) -> None:
+    """Veille implantations : nouveaux établissements (Sirene) d'entreprises ≥ 50 sal. dans le 44."""
+    from datetime import timedelta
+
+    from job_hunter import implantations as imp
+
+    s = get_settings()
+    cfg = imp.load_config(s.implantations_yaml)
+    today = date.today()
+    start = date.fromisoformat(since) if since else today - timedelta(days=s.implantations_lookback_days)
+
+    raw = imp.fetch(s.insee_api_key, cfg.departement, start, today)
+    items = imp.select(raw, cfg)
+    logger.info(f"{len(items)} implantation(s) retenue(s) sur {len(raw)} établissement(s) créé(s)")
+
+    for i in items:
+        km = "?" if i.km_nantes is None else i.km_nantes
+        print(f"{i.date_creation} · {i.entreprise[:40]:<40} · {i.commune[:22]:<22} · {km:>3} km"
+              f" · {i.secteur} · {i.effectif_groupe}")
+
+    if dry_run:
+        return
+    from job_hunter.sheet_writer import SheetWriter
+
+    SheetWriter(s).append_implantations(items, today)
+    if not raw:
+        # 0 établissement sur 2 mois dans le 44 = panne, pas une réalité
+        logger.error("Sirene : 0 établissement collecté — source probablement en panne")
+        raise typer.Exit(code=1)
+
+
 def _silent_zero_sources(all_jobs: list[RawJob], alerts: list[str], selected: list[str]) -> list[str]:
     """Sources sans erreur levée mais sans aucune offre collectée."""
     return [src for src, (count, ok) in _source_stats(all_jobs, alerts, selected).items() if ok and count == 0]

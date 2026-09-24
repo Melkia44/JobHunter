@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     france_travail_client_id: str = ""
     france_travail_client_secret: str = ""
     spreadsheet_id: str = ""
+    insee_api_key: str = ""  # portail-api.insee.fr — API Sirene (veille implantations)
 
     # Scoring
     min_score: int = 65
@@ -42,6 +43,10 @@ class Settings(BaseSettings):
     employers_yaml: Path = _REPO_ROOT / "data" / "employers.yaml"
     target_titles_yaml: Path = _REPO_ROOT / "data" / "target_titles.yaml"
     apec_feeds_yaml: Path = _REPO_ROOT / "data" / "apec_feeds.yaml"
+    implantations_yaml: Path = _REPO_ROOT / "data" / "implantations.yaml"
+
+    # Veille implantations : fenêtre glissante (Sirene enregistre avec retard)
+    implantations_lookback_days: int = 60
 
 
 def get_settings() -> Settings:

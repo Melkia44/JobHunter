@@ -82,3 +82,14 @@ uv run pytest -v
 
 Périmètre testé : normalisation, déduplication, scoring. Les collecteurs se testent
 manuellement via `run --sources X --dry-run` sur données réelles.
+
+## Veille implantations (hebdo)
+
+Nouveaux établissements secondaires dans le 44 d'entreprises ≥ 50 salariés (ou ETI/GE),
+secteurs en liste blanche (`data/implantations.yaml`) → onglet **Implantations** du Sheet
+(créé au 1er run, dédup par SIRET). Cible : candidatures spontanées.
+
+1. Clé : [portail-api.insee.fr](https://portail-api.insee.fr) → créer une application →
+   souscrire **API Sirene** → `INSEE_API_KEY` dans `.env` et en secret GitHub.
+2. Calibrage sur l'historique : `uv run job-hunter implantations --since 2026-03-01 --dry-run`
+3. Run : `uv run job-hunter implantations` — planifié le lundi (`implantations.yml`).

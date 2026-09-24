@@ -26,6 +26,12 @@ TAB_OFFERS = "Offres"
 TAB_EMPLOYERS = "Cibles"
 TAB_PILOTAGE = "Repères & pipeline"
 TAB_SOURCES = "Sources"
+TAB_IMPLANTATIONS = "Implantations"  # créé au 1er run s'il n'existe pas
+
+IMPLANTATION_HEADERS = [
+    "Détecté le", "Entreprise", "Enseigne", "Commune", "Km Nantes", "Créé le",
+    "Secteur", "NAF", "Effectif groupe", "Catégorie", "SIRET", "Fiche", "Statut", "Notes",
+]
 
 # Sources logiques (base.SOURCES) → libellé affiché dans l'onglet 'Sources'
 SOURCE_ROW_LABELS = {
@@ -278,6 +284,48 @@ class SheetWriter:
             logger.info(f"Sheet : tableau '{TAB_SOURCES}' mis à jour")
         except Exception as exc:  # noqa: BLE001 — tableau de bord non critique, jamais bloquant
             logger.warning(f"'{TAB_SOURCES}' non mis à jour : {exc}")
+
+    # --- Onglet 'Implantations' ----------------------------------------------
+
+    def append_implantations(self, items: list, today: date) -> int:
+        """Append des nouvelles implantations. Dédup par SIRET (colonne K) : le Sheet
+        est la seule mémoire — pas de DB à committer pour cette veille hebdo."""
+        self._ensure_tab(TAB_IMPLANTATIONS, IMPLANTATION_HEADERS)
+        existing = {r[0].strip() for r in self._read(f"'{TAB_IMPLANTATIONS}'!K2:K") if r}
+        rows = [
+            [
+                today.strftime("%d/%m/%Y"), i.entreprise, i.enseigne, i.commune,
+                "" if i.km_nantes is None else i.km_nantes, i.date_creation, i.secteur,
+                i.naf, i.effectif_groupe, i.categorie, f"'{i.siret}",
+                i.url, "À qualifier", "",
+            ]
+            for i in items
+            if i.siret not in existing
+        ]
+        if rows:
+            self._svc.spreadsheets().values().append(
+                spreadsheetId=self._sheet_id,
+                range=f"'{TAB_IMPLANTATIONS}'!A:N",
+                valueInputOption="USER_ENTERED",
+                insertDataOption="INSERT_ROWS",
+                body={"values": rows},
+            ).execute()
+        logger.info(f"Sheet : {len(rows)} implantation(s) ajoutée(s) dans '{TAB_IMPLANTATIONS}'")
+        return len(rows)
+
+    def _ensure_tab(self, title: str, headers: list[str]) -> None:
+        meta = self._svc.spreadsheets().get(
+            spreadsheetId=self._sheet_id, fields="sheets.properties.title"
+        ).execute()
+        if title in {sh["properties"]["title"] for sh in meta.get("sheets", [])}:
+            return
+        self._svc.spreadsheets().batchUpdate(
+            spreadsheetId=self._sheet_id,
+            body={"requests": [{"addSheet": {"properties": {
+                "title": title, "gridProperties": {"frozenRowCount": 1}}}}]},
+        ).execute()
+        self._batch_update([{"range": f"'{title}'!A1", "values": [headers]}])
+        logger.info(f"Sheet : onglet '{title}' créé")
 
     # --- Interne ----------------------------------------------------------------
 

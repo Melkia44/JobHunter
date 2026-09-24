@@ -1,0 +1,28 @@
+# Veille implantations (commande `job-hunter implantations`)
+# Signal visé : NOUVEL établissement secondaire en Loire-Atlantique d'une entreprise
+# déjà significative (≥ 50 salariés au niveau de l'unité légale, ou ETI/GE).
+
+departement: "44"
+
+# Tranches d'effectif INSEE de l'UNITÉ LÉGALE retenues (21 = 50-99 sal. et au-delà).
+# L'effectif de l'établissement neuf est presque toujours « NN » → inutilisable.
+tranches_effectif_min: ["21", "22", "31", "32", "41", "42", "51", "52", "53"]
+# Filet quand la tranche est inconnue (NN) mais que l'INSEE a classé l'entreprise.
+categories_entreprise: ["ETI", "GE"]
+
+# Préfixes NAF retenus (établissement OU unité légale). Liste blanche : sans elle, les
+# ouvertures de magasins, agences bancaires/intérim et chantiers BTP noient le signal.
+naf_prefixes:
+  "26": "Électronique / informatique (fabrication)"
+  "58.2": "Édition de logiciels"
+  "61": "Télécommunications"
+  "62": "Programmation, conseil informatique (ESN)"
+  "63": "Traitement de données, hébergement"
+  "70.10": "Sièges sociaux"
+  "70.22": "Conseil en gestion"
+  "71.12": "Ingénierie"
+  "72": "R&D"
+  "82.20": "Centres d'appels / services clients"
+
+# Distance calculée depuis le centre de Nantes (km, colonne indicative, pas un filtre)
+nantes_lambert93: [355400, 6689400]
