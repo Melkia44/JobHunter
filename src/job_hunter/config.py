@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # Veille implantations : fenêtre glissante (Sirene enregistre avec retard)
     implantations_lookback_days: int = 60
 
+    # Café Emploi → Sheet : dossier Drive « CafeEmploi-inbox » (partagé en lecture avec le SA)
+    cafe_inbox_folder_id: str = "1iBTexMFLte1hW3lo4NwGYjVKdRmBFLZT"
+    relance_days: int = 7
+
 
 def get_settings() -> Settings:
     return Settings()

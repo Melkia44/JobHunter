@@ -93,3 +93,14 @@ secteurs en liste blanche (`data/implantations.yaml`) → onglet **Implantations
    souscrire **API Sirene** → `INSEE_API_KEY` dans `.env` et en secret GitHub.
 2. Calibrage sur l'historique : `uv run job-hunter implantations --since 2026-03-01 --dry-run`
 3. Run : `uv run job-hunter implantations` — planifié le lundi (`implantations.yml`).
+
+## Suivi des candidatures depuis Café Emploi (synchro horaire)
+
+Changer un statut dans Café Emploi dépose un JSON dans le dossier Drive
+`CafeEmploi-inbox` ; `job-hunter sync-statuts` (workflow horaire `sync-statuts.yml`)
+l'applique à l'onglet Offres : Statut (K), Date candidature (N, si vide, sur « Postulée »),
+Relance le (O = +7 j). Filigrane dans l'onglet `Sync` (créé au 1er run).
+
+Mise en place (une fois) :
+1. GCP du compte de service : activer l'**API Google Drive**.
+2. Partager le dossier Drive `CafeEmploi-inbox` avec l'email du SA en **Lecteur**.

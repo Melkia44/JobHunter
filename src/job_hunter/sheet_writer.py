@@ -26,7 +26,8 @@ TAB_OFFERS = "Offres"
 TAB_EMPLOYERS = "Cibles"
 TAB_PILOTAGE = "Repères & pipeline"
 TAB_SOURCES = "Sources"
-TAB_IMPLANTATIONS = "Implantations"  # créé au 1er run s'il n'existe pas
+TAB_IMPLANTATIONS = "Implantations"
+TAB_SYNC = "Sync"  # filigrane de la synchro Café Emploi (créé au 1er run)  # créé au 1er run s'il n'existe pas
 
 IMPLANTATION_HEADERS = [
     "Détecté le", "Entreprise", "Enseigne", "Commune", "Km Nantes", "Créé le",
@@ -310,6 +311,29 @@ class SheetWriter:
             logger.info(f"Sheet : '{TAB_OFFERS}' trié (plus récentes en haut)")
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"'{TAB_OFFERS}' non trié : {exc}")
+
+    # --- Synchro statuts Café Emploi -----------------------------------------
+
+    def read_sync_watermark(self) -> str:
+        self._ensure_tab(TAB_SYNC, ["Dernier fichier Café Emploi traité (createdTime Drive)"])
+        rows = self._read(f"'{TAB_SYNC}'!A2:A2")
+        return rows[0][0].strip() if rows and rows[0] else ""
+
+    def apply_status_updates(self, updates: list[dict], watermark: str) -> None:
+        """Écrit les statuts puis le filigrane — dans cet ordre : un crash entre les
+        deux rejoue les événements au run suivant (idempotent), sans en perdre."""
+        from job_hunter.status_sync import RELANCE_HEADER
+
+        head = self._read(f"'{TAB_OFFERS}'!O1:O1")
+        if not head or not head[0] or head[0][0].strip() != RELANCE_HEADER:
+            updates = [{"range": f"'{TAB_OFFERS}'!O1", "values": [[RELANCE_HEADER]]}, *updates]
+        if updates:
+            self._batch_update(updates)
+        self._batch_update([{"range": f"'{TAB_SYNC}'!A2", "values": [[watermark]]}])
+        logger.info(f"Sheet : {len(updates)} cellule(s) de suivi écrite(s), filigrane {watermark or '(vide)'}")
+
+    def read_offer_rows(self) -> list[list[str]]:
+        return self._read(f"'{TAB_OFFERS}'!A2:O")
 
     # --- Onglet 'Implantations' ----------------------------------------------
 

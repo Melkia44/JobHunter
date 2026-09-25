@@ -283,6 +283,33 @@ def implantations(
         raise typer.Exit(code=1)
 
 
+@app.command("sync-statuts")
+def sync_statuts(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Affiche les écritures sans toucher au Sheet"),
+) -> None:
+    """Applique au Sheet les statuts changés dans Café Emploi (dossier Drive CafeEmploi-inbox)."""
+    from google.oauth2 import service_account
+
+    from job_hunter import status_sync
+    from job_hunter.sheet_writer import SheetWriter
+
+    s = get_settings()
+    writer = SheetWriter(s)
+    creds = service_account.Credentials.from_service_account_file(
+        str(s.service_account_path), scopes=["https://www.googleapis.com/auth/drive.readonly"]
+    )
+    after = writer.read_sync_watermark()
+    events, watermark = status_sync.fetch_events(creds, s.cafe_inbox_folder_id, after)
+    if not events and watermark == after:
+        logger.info("Café Emploi : rien de nouveau")
+        return
+    updates = status_sync.plan_updates(writer.read_offer_rows(), events, s.relance_days)
+    for u in updates:
+        print(f"{u['range']:<16} ← {u['values'][0][0]}")
+    if not dry_run:
+        writer.apply_status_updates(updates, watermark)
+
+
 def _silent_zero_sources(all_jobs: list[RawJob], alerts: list[str], selected: list[str]) -> list[str]:
     """Sources sans erreur levée mais sans aucune offre collectée."""
     return [src for src, (count, ok) in _source_stats(all_jobs, alerts, selected).items() if ok and count == 0]
