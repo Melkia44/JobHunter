@@ -285,6 +285,32 @@ class SheetWriter:
         except Exception as exc:  # noqa: BLE001 — tableau de bord non critique, jamais bloquant
             logger.warning(f"'{TAB_SOURCES}' non mis à jour : {exc}")
 
+    def sort_offers(self) -> None:
+        """Trie 'Offres' : date de repérage (A) décroissante, puis % compatibilité (L).
+        Sans ce tri, l'append pose les nouveautés tout en bas (ligne 200+), sous
+        l'historique — incident du 25/09/2026. Non bloquant."""
+        try:
+            meta = self._svc.spreadsheets().get(
+                spreadsheetId=self._sheet_id, fields="sheets.properties(sheetId,title)"
+            ).execute()
+            sheet_id = next(
+                sh["properties"]["sheetId"] for sh in meta["sheets"]
+                if sh["properties"]["title"] == TAB_OFFERS
+            )
+            self._svc.spreadsheets().batchUpdate(
+                spreadsheetId=self._sheet_id,
+                body={"requests": [{"sortRange": {
+                    "range": {"sheetId": sheet_id, "startRowIndex": 1},  # garde l'en-tête
+                    "sortSpecs": [
+                        {"dimensionIndex": 0, "sortOrder": "DESCENDING"},
+                        {"dimensionIndex": 11, "sortOrder": "DESCENDING"},
+                    ],
+                }}]},
+            ).execute()
+            logger.info(f"Sheet : '{TAB_OFFERS}' trié (plus récentes en haut)")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"'{TAB_OFFERS}' non trié : {exc}")
+
     # --- Onglet 'Implantations' ----------------------------------------------
 
     def append_implantations(self, items: list, today: date) -> int:

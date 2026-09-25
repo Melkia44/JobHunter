@@ -220,6 +220,7 @@ def run(
             appended = writer.append_offers(retained, today)
             writer.revalidate_offers()
             writer.archive_stale_offers(today, s.archive_after_days)
+            writer.sort_offers()
             touched = {
                 emp.name
                 for sj in retained

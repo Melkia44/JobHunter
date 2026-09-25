@@ -2,10 +2,10 @@ name: Daily Job Hunt
 
 on:
   schedule:
-    # 01:23 UTC ≈ 03h23 Paris (été) / 02h23 (hiver). GitHub retarde souvent de 5-7 h
-    # (runs de 08:30 UTC passés vers 15h-17h) : la nuit garantit des offres prêtes à 10h.
-    # Minute non ronde : moins de congestion qu'à :00.
-    - cron: '23 1 * * *'
+    # 22:47 UTC ≈ 00h47 Paris (été) / 23h47 (hiver). GitHub retarde souvent de 5-7 h :
+    # le run du 25/09 programmé à 01:23 UTC a écrit à 08h12 Paris. Départ avancé pour
+    # des offres prêtes au plus tard vers 6h. Minute non ronde : moins de congestion.
+    - cron: '47 22 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
