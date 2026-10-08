@@ -5,6 +5,7 @@ Le score d'un titre = poids du titre cible le mieux placé qu'il contient (subst
 sinon ratio fuzzy × poids. Les intitulés ambigus (GATED_TARGETS : « chef de projet »,
 « service manager », « responsable de production »…) sans marqueur IT sont plafonnés plus bas : c'est la description, quand elle existe, qui tranche.
 """
+import re
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -46,6 +47,10 @@ DEFAULT_TARGET_TITLES = [
     "contract manager",
     "customer success manager",
     "project manager",
+    "responsable operationnel de compte",
+    "roc",
+    "responsable de contrat",
+    "directeur de contrat",
 ]
 
 # Poids par titre cible normalisé (absent = 100). Modifier ici pour changer les priorités.
@@ -78,6 +83,11 @@ TITLE_WEIGHTS: dict[str, float] = {
     "contract manager": 80,  # gated
     "customer success manager": 70,  # gated
     "project manager": 75,  # gated, comme « chef de projet »
+    # ROC = Responsable Opérationnel de Comptes : nom ESN/infogérance du SDM (08/10/2026)
+    "responsable operationnel de compte": 100,
+    "roc": 100,
+    "responsable de contrat": 90,  # gated (BTP, juridique…)
+    "directeur de contrat": 90,  # gated
 }
 CHEF_DE_PROJET_GENERIC = 60
 
@@ -93,6 +103,8 @@ GATED_TARGETS = {
     "contract manager",
     "customer success manager",
     "project manager",
+    "responsable de contrat",
+    "directeur de contrat",
 }
 
 
@@ -117,9 +129,17 @@ def _weight(target: str, title_norm: str) -> float:
     return w
 
 
+def _contains(target: str, title_norm: str) -> bool:
+    """Substring, sauf sigles courts (« roc », « sdm », « pmo », « itsm ») : mot entier,
+    sinon « roc » matcherait « process », « procurement », « brocante »…"""
+    if len(target) <= 4:
+        return re.search(rf"\b{re.escape(target)}\b", title_norm) is not None
+    return target in title_norm
+
+
 def score_title_match(title: str, targets: list[str]) -> float:
     title_norm = normalize(title)
-    hits = [_weight(t, title_norm) for t in targets if t in title_norm]
+    hits = [_weight(t, title_norm) for t in targets if _contains(t, title_norm)]
     if hits:
         return float(max(hits))
     # Fuzzy sans marqueur IT plafonné comme les intitulés ambigus : « Responsable brasserie »

@@ -38,6 +38,8 @@ KEYWORDS = (
     "PMO",
     "product owner",
     "data engineer",
+    "responsable opérationnel de comptes",  # ROC = SDM côté ESN (08/10/2026)
+    "responsable de contrat infogérance",
 )
 CDI_CODE = "101888"          # CONTRACT_TYPE_FILTERING : CDI
 NANTES_LATLON = (47.2184, -1.5536)

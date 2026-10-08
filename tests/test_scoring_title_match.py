@@ -77,3 +77,19 @@ def test_project_manager_comme_chef_de_projet():
     assert score_title_match("Project Manager H/F", TARGETS) == 60  # sans marqueur IT : description tranche
     assert score_title_match("IT Project Manager", TARGETS) == 75
     assert score_title_match("Senior Project Manager Data", TARGETS) == 75
+
+
+def test_roc_titres_esn():
+    assert score_title_match("Responsable Opérationnel de Comptes (ROC) H/F", TARGETS) == 100
+    assert score_title_match("ROC - Infogérance Nantes", TARGETS) == 100
+
+
+def test_roc_mot_entier_seulement():
+    # « roc » ne doit pas matcher en substring (process, procurement, brocante)
+    assert score_title_match("Process Engineer", TARGETS) < 70
+    assert score_title_match("Acheteur procurement", TARGETS) < 70
+
+
+def test_responsable_de_contrat_gated():
+    assert score_title_match("Responsable de contrat infogérance", TARGETS) == 90
+    assert score_title_match("Responsable de contrat BTP", TARGETS) <= 60

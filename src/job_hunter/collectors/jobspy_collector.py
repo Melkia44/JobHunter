@@ -22,6 +22,7 @@ QUERIES: list[tuple[str, str]] = [
     # Élargissement 23/09/2026. « Service Manager » / « Delivery Manager » retirés le même
     # jour : sur Indeed = managers retail/restauration (run #90). Couverts par les alertes mail.
     ("Responsable production informatique", "Nantes, France"),
+    ("Responsable opérationnel de comptes", "Nantes, France"),  # ROC = SDM côté ESN (08/10/2026)
 ]
 
 # Glassdoor retiré le 04/07/2026 : HTTP 400 "location not parsed" systématique côté JobSpy.

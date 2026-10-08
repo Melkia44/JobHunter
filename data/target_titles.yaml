@@ -33,3 +33,8 @@ titles:
   - "contract manager"
   - "customer success manager"
   - "project manager"
+  # Élargissement 08/10/2026 : appellation ESN/infogérance du métier SDM (vu chez SCC)
+  - "responsable operationnel de compte"   # couvre « … de comptes »
+  - "roc"                                  # mot entier uniquement (cf. title_match)
+  - "responsable de contrat"
+  - "directeur de contrat"
