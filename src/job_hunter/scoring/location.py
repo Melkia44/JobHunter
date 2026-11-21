@@ -1,61 +1,61 @@
-"""Sous-score localisation.
+"""Sous-score localisation (zone : profile.yaml › location).
 
 Principe (acté 04/07/2026) : on ne pénalise que ce qu'on sait. L'inconnu d'une
-source géo-filtrée par construction (FT commune+50 km, recherches APEC, employeurs
-choisis) vaut 75 ; l'inconnu jobspy vaut 50 (neutre). Plus aucun 0 : le hors-zone
-positif n'est pas détectable sans gazetteer national, on s'appuie sur les
-pré-filtres amont.
+source géo-filtrée par construction (FT centre+rayon, APEC, employeurs choisis)
+vaut 75 ; l'inconnu jobspy vaut 50 (neutre). Le hors-zone n'est détecté que sur
+un code postal explicite hors des départements de la zone (30).
+
+  home 100 · core_cities 90 · area_cities 75 · departments 60 · CP hors zone 30
 """
 import re
 
 from job_hunter.models import Source
 from job_hunter.normalizer import normalize
+from job_hunter.profile import get_profile
 
-# Formes normalisées tout-tirets (le matching remplace les espaces par des tirets)
-NANTES_METRO = {
-    "nantes", "saint-herblain", "reze", "vertou", "carquefou", "orvault",
-    "saint-sebastien", "bouguenais", "la-chapelle-sur-erdre",
-}
-LOIRE_ATLANTIQUE_50KM = {
-    "ancenis", "clisson", "chateaubriant", "saint-nazaire", "pornic",
-    "nort-sur-erdre", "blain", "guerande",
-    # 23/09/2026 : communes de la couronne nantaise (lieux explicites des pages Cegid)
-    "sainte-luce-sur-loire", "basse-goulaine", "treillieres", "sautron", "coueron",
-    "bouaye", "thouare-sur-loire", "les-sorinieres", "suce-sur-erdre", "grandchamp",
-    "saint-jean-de-boiseau", "haute-goulaine",
-}
 GEO_PREFILTERED: set[str] = {"france_travail", "apec_rss", "careers_site"}
-_DEPT44_RE = re.compile(r"^44\s*-|\b44\d{3}\b")
 _CP_RE = re.compile(r"\b(\d{5})\b")
+
+
+def _hyph(s: str) -> str:
+    return normalize(s).replace(" ", "-")  # "saint herblain" et "saint-herblain" convergent
+
+
+def _in_department(loc: str, loc_h: str, depts: list[str], names: list[str]) -> bool:
+    for d in depts:
+        if re.search(rf"^{re.escape(d)}\s*-|\b{re.escape(d)}\d{{{5 - len(d)}}}\b", loc):
+            return True
+    return any(_hyph(n) in loc_h for n in names)
 
 
 def score_location(location: str, remote_pct: int | None, source: Source) -> float:
     if remote_pct == 100:
         return 100.0
+    zone = get_profile().location
     loc = normalize(location or "")
-    loc_h = loc.replace(" ", "-")  # "saint herblain" et "saint-herblain" convergent
+    loc_h = loc.replace(" ", "-")
     if "(hors zone)" in loc:
         return 30.0  # lieu explicite hors zone (page détail) : cf. _zone_tagged
-    if "nort-sur-erdre" in loc_h:
+    if zone.home and _hyph(zone.home) in loc_h:
         return 100.0
-    if any(city in loc_h for city in NANTES_METRO):
+    if any(_hyph(c) in loc_h for c in [zone.center.city, *zone.core_cities]):
         return 90.0
-    if any(city in loc_h for city in LOIRE_ATLANTIQUE_50KM):
+    if any(_hyph(c) in loc_h for c in zone.area_cities):
         return 75.0
-    if _DEPT44_RE.search(loc) or "loire-atlantique" in loc_h:
+    if _in_department(loc, loc_h, zone.departments, zone.department_names):
         return 60.0
     m = _CP_RE.search(loc)
-    if m and not m.group(1).startswith("44"):
-        # CP français explicite hors 44 (ex. lieu extrait d'une page détail Cegid) :
+    if m and zone.departments and not m.group(1).startswith(tuple(zone.departments)):
+        # CP français explicite hors zone (ex. lieu extrait d'une page détail Cegid) :
         # positivement hors zone — le plancher géo-filtré ne doit pas s'appliquer
         return 30.0
     if remote_pct is not None and remote_pct >= 50:
         return 70.0
     if source in GEO_PREFILTERED:
-        return 75.0  # en zone par construction, ville juste hors gazetteer
+        return 75.0  # en zone par construction, ville juste hors liste
     return 50.0  # jobspy, lieu inconnu : neutre
 
 
 def is_known_zone(location: str) -> bool:
-    """Vrai si le lieu est reconnu dans la zone (métropole, 44 à ~50 km, dépt 44)."""
+    """Vrai si le lieu est reconnu dans la zone (villes listées ou département)."""
     return score_location(location, None, "jobspy_indeed") >= 60.0

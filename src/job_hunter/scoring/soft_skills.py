@@ -1,18 +1,10 @@
-"""Sous-score soft skills : regex pondérées sur la description (titre en fallback)."""
+"""Sous-score soft skills : regex pondérées (profile.yaml › soft_skills) sur titre + description."""
 import re
 
-SOFT_SKILLS: dict[str, int] = {
-    r"\bmanagement\b": 20,
-    r"\binternational\b": 15,
-    r"\bmulti[- ]sites?\b": 15,
-    r"\banglais\b": 15,
-    r"\bencadrement\b": 10,
-    r"\b(?:gouvernance|governance)\b": 10,
-    r"\btransversal\b": 10,
-    r"\brelation client\b": 10,
-}
+from job_hunter.profile import get_profile
 
 
 def score_soft_skills(text: str) -> float:
     low = text.lower()
-    return float(min(100, sum(w for p, w in SOFT_SKILLS.items() if re.search(p, low))))
+    skills = get_profile().soft_skills
+    return float(min(100, sum(w for p, w in skills.items() if re.search(p, low))))

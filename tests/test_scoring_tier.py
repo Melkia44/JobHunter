@@ -31,7 +31,18 @@ def test_empty_company(employers):
 def test_real_employers_yaml_parses():
     from job_hunter.collectors.careers_sites_collector import load_employers
 
-    path = Path(__file__).parents[1] / "data" / "employers.yaml"
+    path = Path(__file__).parent / "fixtures" / "employers.yaml"
     employers = load_employers(path)
     assert len(employers) >= 65  # 20 cibles historiques + élargissement TOP50 (05/07/2026)
     assert sum(1 for e in employers if e.tier == 1) == 8  # le tier 1 reste les 8 cibles P1
+
+
+def test_fichiers_livres_valides():
+    """data/profile.yaml et data/employers.yaml (ceux qu'on adapte) restent chargeables."""
+    from job_hunter.collectors.careers_sites_collector import load_employers
+    from job_hunter.profile import get_profile
+
+    root = Path(__file__).parents[1] / "data"
+    prof = get_profile(root / "profile.yaml")
+    assert prof.titles and prof.sources and prof.location.center.insee
+    assert load_employers(root / "employers.yaml") == []

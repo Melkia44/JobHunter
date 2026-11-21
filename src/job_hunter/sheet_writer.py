@@ -27,10 +27,9 @@ TAB_EMPLOYERS = "Cibles"
 TAB_PILOTAGE = "Repères & pipeline"
 TAB_SOURCES = "Sources"
 TAB_IMPLANTATIONS = "Implantations"
-TAB_SYNC = "Sync"  # filigrane de la synchro Café Emploi (créé au 1er run)  # créé au 1er run s'il n'existe pas
 
 IMPLANTATION_HEADERS = [
-    "Détecté le", "Entreprise", "Enseigne", "Commune", "Km Nantes", "Créé le",
+    "Détecté le", "Entreprise", "Enseigne", "Commune", "Km centre", "Créé le",
     "Secteur", "NAF", "Effectif groupe", "Catégorie", "SIRET", "Fiche", "Statut", "Notes",
 ]
 
@@ -38,7 +37,7 @@ IMPLANTATION_HEADERS = [
 SOURCE_ROW_LABELS = {
     "jobspy": "jobspy (Indeed / Google)",
     "france_travail": "France Travail",
-    "apec": "APEC (RSS)",
+    "apec": "APEC",
     "careers_sites": "Sites carrières",
     "email_alerts": "Alertes mail (LinkedIn / Hellowork / Indeed)",
 }
@@ -62,6 +61,14 @@ PIPELINE_STATUSES = [
 
 _TIER_SUFFIX_RE = re.compile(r"\s*\(p[1-3]\)$")
 
+# En-têtes des onglets créés par init_tabs (l'ordre des colonnes Offres est figé :
+# _offer_row, revalidate_rows et sort_offers lisent par position)
+OFFER_HEADERS = [
+    "Date repérage", "Employeur", "Intitulé", "Lieu", "Contrat", "Salaire", "Publiée",
+    "Lien", "Source", "Pourquoi", "Statut", "% Compatibilité", "Motif archivage",
+]
+EMPLOYER_HEADERS = ["Employeur", "Tier", "Secteur", "Statut", "Dernière action", "Prochaine action"]
+
 # Colonne M de l'onglet Offres : pourquoi l'outil a archivé la ligne (traçabilité)
 REASON_HEADER = "Motif archivage"
 
@@ -79,19 +86,30 @@ class SheetWriter:
         self._sheet_id = settings.spreadsheet_id
 
     def check_access(self) -> str:
-        """Valide auth + partage (403 = non partagé avec le SA) + présence des 3 onglets."""
+        """Valide auth + partage (403 = non partagé avec le SA)."""
         meta = (
             self._svc.spreadsheets()
             .get(spreadsheetId=self._sheet_id, fields="properties.title,sheets.properties.title")
             .execute()
         )
-        tabs = [sh["properties"]["title"] for sh in meta.get("sheets", [])]
-        missing = [t for t in (TAB_OFFERS, TAB_EMPLOYERS, TAB_PILOTAGE) if t not in tabs]
-        if missing:
-            raise RuntimeError(
-                f"Onglet(s) introuvable(s) : {', '.join(missing)} — présents : {', '.join(tabs)}"
-            )
         return meta["properties"]["title"]
+
+    def init_tabs(self, employers: list[Employer]) -> None:
+        """Crée les onglets manquants avec leurs en-têtes (classeur vierge accepté).
+        Ne touche jamais un onglet existant. Appelé par `setup` et à chaque `run`."""
+        self._ensure_tab(TAB_OFFERS, OFFER_HEADERS)
+        self._ensure_tab(
+            TAB_EMPLOYERS, EMPLOYER_HEADERS,
+            [[e.name, f"P{e.tier}", e.sector or "", "À cibler", "", ""] for e in employers],
+        )
+        self._ensure_tab(
+            TAB_PILOTAGE, ["Statut", "Nombre"],
+            [[st, 0] for st in PIPELINE_STATUSES] + [["Total cibles", len(employers)]],
+        )
+        self._ensure_tab(
+            TAB_SOURCES, ["Source", "Offres (dernier run)", "Statut", "Dernier run OK"],
+            [[SOURCE_ROW_LABELS[k], "", "", "—"] for k in SOURCE_ROW_LABELS],
+        )
 
     # --- Onglet 'Offres détectées' -------------------------------------------
 
@@ -312,29 +330,6 @@ class SheetWriter:
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"'{TAB_OFFERS}' non trié : {exc}")
 
-    # --- Synchro statuts Café Emploi -----------------------------------------
-
-    def read_sync_watermark(self) -> str:
-        self._ensure_tab(TAB_SYNC, ["Dernier fichier Café Emploi traité (createdTime Drive)"])
-        rows = self._read(f"'{TAB_SYNC}'!A2:A2")
-        return rows[0][0].strip() if rows and rows[0] else ""
-
-    def apply_status_updates(self, updates: list[dict], watermark: str) -> None:
-        """Écrit les statuts puis le filigrane — dans cet ordre : un crash entre les
-        deux rejoue les événements au run suivant (idempotent), sans en perdre."""
-        from job_hunter.status_sync import RELANCE_HEADER
-
-        head = self._read(f"'{TAB_OFFERS}'!O1:O1")
-        if not head or not head[0] or head[0][0].strip() != RELANCE_HEADER:
-            updates = [{"range": f"'{TAB_OFFERS}'!O1", "values": [[RELANCE_HEADER]]}, *updates]
-        if updates:
-            self._batch_update(updates)
-        self._batch_update([{"range": f"'{TAB_SYNC}'!A2", "values": [[watermark]]}])
-        logger.info(f"Sheet : {len(updates)} cellule(s) de suivi écrite(s), filigrane {watermark or '(vide)'}")
-
-    def read_offer_rows(self) -> list[list[str]]:
-        return self._read(f"'{TAB_OFFERS}'!A2:O")
-
     # --- Onglet 'Implantations' ----------------------------------------------
 
     def append_implantations(self, items: list, today: date) -> int:
@@ -345,7 +340,7 @@ class SheetWriter:
         rows = [
             [
                 today.strftime("%d/%m/%Y"), i.entreprise, i.enseigne, i.commune,
-                "" if i.km_nantes is None else i.km_nantes, i.date_creation, i.secteur,
+                "" if i.km_centre is None else i.km_centre, i.date_creation, i.secteur,
                 i.naf, i.effectif_groupe, i.categorie, f"'{i.siret}",
                 i.url, "À qualifier", "",
             ]
@@ -363,7 +358,7 @@ class SheetWriter:
         logger.info(f"Sheet : {len(rows)} implantation(s) ajoutée(s) dans '{TAB_IMPLANTATIONS}'")
         return len(rows)
 
-    def _ensure_tab(self, title: str, headers: list[str]) -> None:
+    def _ensure_tab(self, title: str, headers: list[str], rows: list[list] | None = None) -> None:
         meta = self._svc.spreadsheets().get(
             spreadsheetId=self._sheet_id, fields="sheets.properties.title"
         ).execute()
@@ -374,7 +369,7 @@ class SheetWriter:
             body={"requests": [{"addSheet": {"properties": {
                 "title": title, "gridProperties": {"frozenRowCount": 1}}}}]},
         ).execute()
-        self._batch_update([{"range": f"'{title}'!A1", "values": [headers]}])
+        self._batch_update([{"range": f"'{title}'!A1", "values": [headers, *(rows or [])]}])
         logger.info(f"Sheet : onglet '{title}' créé")
 
     # --- Interne ----------------------------------------------------------------
@@ -474,6 +469,12 @@ def _source_label(source: str, company: str) -> str:
     return SOURCE_LABELS.get(source, source)
 
 
+def _it_only() -> bool:
+    from job_hunter.profile import get_profile
+
+    return get_profile().filters.it_only
+
+
 def revalidate_rows(rows: list[list[str]]) -> list[tuple[int, str]]:
     """(index 0-based relatif à rows, motif) des lignes « Nouvelle » à archiver.
     rows = A2:K de l'onglet Offres (B employeur, C intitulé, D lieu, E contrat,
@@ -511,7 +512,7 @@ def revalidate_rows(rows: list[list[str]]) -> list[tuple[int, str]]:
         )
         if is_excluded_contract(job):
             out.append((i, "Contrat hors CDI"))
-        elif is_off_domain(job):
+        elif _it_only() and is_off_domain(job):
             out.append((i, "Métier hors IT"))
         elif "(hors zone)" in cell(3).lower():
             out.append((i, "Lieu hors zone"))

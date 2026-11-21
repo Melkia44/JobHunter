@@ -2,14 +2,13 @@ name: Daily Job Hunt
 
 on:
   schedule:
-    # 22:47 UTC ≈ 00h47 Paris (été) / 23h47 (hiver). GitHub retarde souvent de 5-7 h :
-    # le run du 25/09 programmé à 01:23 UTC a écrit à 08h12 Paris. Départ avancé pour
-    # des offres prêtes au plus tard vers 6h. Minute non ronde : moins de congestion.
+    # 22:47 UTC ≈ 23h47-00h47 Paris. GitHub retarde souvent les crons de plusieurs heures :
+    # départ de nuit pour des offres prêtes le matin. Minute non ronde : moins de congestion.
     - cron: '47 22 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Test à blanc : alertes mail uniquement, aucune écriture (ni Sheet, ni DB dédup)"
+        description: "Test à blanc : collecte + scoring complets, aucune écriture (ni Sheet, ni DB dédup)"
         type: boolean
         default: false
 
@@ -54,7 +53,7 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           ARGS=()
-          if [ "$DRY_RUN" = "true" ]; then ARGS=(--dry-run --sources email_alerts); fi
+          if [ "$DRY_RUN" = "true" ]; then ARGS=(--dry-run); fi
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           uv run job-hunter run "${ARGS[@]}" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"

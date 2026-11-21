@@ -1,0 +1,149 @@
+# ============================================================================
+# PROFIL DE RECHERCHE — le seul fichier à adapter à la personne qui cherche.
+# Valeurs livrées = profil d'exemple (SDM / chef de projet IT autour de Nantes) :
+# remplace-les par les tiennes. Les accents et la casse n'ont pas d'importance.
+# ============================================================================
+
+# Sources lancées par `job-hunter run` (et donc par la CI).
+#   jobspy          Indeed + Google Jobs (aucune config)
+#   france_travail  API France Travail (FRANCE_TRAVAIL_CLIENT_ID / _SECRET)
+#   apec            API APEC (aucune config ; souvent bloquée depuis GitHub, non bloquant)
+#   careers_sites   sites carrières des employeurs de data/employers.yaml (careers_url + ats)
+#   email_alerts    alertes mail LinkedIn / Hellowork / Indeed (ALERTS_IMAP_USER / _PASSWORD)
+# Une source listée mais non configurée remonte 0 offre → run en échec : ne liste que
+# celles que tu as configurées.
+sources:
+  - jobspy
+  - france_travail
+  - apec
+  # - careers_sites
+  # - email_alerts
+
+# --- Intitulés visés ---------------------------------------------------------
+# Un intitulé d'offre qui CONTIENT l'un d'eux prend son poids (100 par défaut) ;
+# sinon score approché (similarité de texte). Sigles ≤ 4 lettres : mot entier.
+# gated: true = intitulé ambigu hors IT, plafonné à generic_cap sans marqueur IT
+# (« it », « si », « data », « erp »…) — sans effet si filters.it_only est false.
+# Forme courte acceptée : « - 'product manager' » (poids 100).
+titles:
+  - {title: 'service delivery manager'}
+  - {title: 'delivery manager'}
+  - {title: 'sdm'}
+  - {title: 'chef de projet', weight: 75, gated: true}
+  - {title: 'responsable operations services'}
+  - {title: 'operations services'}
+  - {title: 'pmo', weight: 75}
+  - {title: 'product manager', weight: 90}
+  - {title: 'product owner', weight: 90}
+  - {title: 'data engineer', weight: 85}
+  - {title: 'chef de projet delivery', weight: 90}
+  - {title: 'service delivery'}
+  - {title: 'delivery lead', weight: 95}
+  - {title: 'service owner', weight: 95}
+  - {title: 'service manager', weight: 95, gated: true}
+  - {title: 'responsable mco', weight: 95}
+  - {title: 'responsable run', weight: 95}
+  - {title: 'incident manager', weight: 85}
+  - {title: 'problem manager', weight: 80}
+  - {title: 'itsm', weight: 85}
+  - {title: 'technical account manager', weight: 85}
+  - {title: 'responsable de production', weight: 90, gated: true}
+  - {title: 'responsable production', weight: 90, gated: true}
+  - {title: 'responsable d''exploitation', weight: 90, gated: true}
+  - {title: 'responsable exploitation', weight: 90, gated: true}
+  - {title: 'contract manager', weight: 80, gated: true}
+  - {title: 'customer success manager', weight: 70, gated: true}
+  - {title: 'project manager', weight: 75, gated: true}
+  - {title: 'responsable operationnel de compte'}
+  - {title: 'roc'}
+  - {title: 'responsable de contrat', weight: 90, gated: true}
+  - {title: 'directeur de contrat', weight: 90, gated: true}
+
+generic_cap: 60
+
+# --- Compétences (regex sur titre + description → points, plafonné à 100) -----
+# Garder les guillemets simples : \b = frontière de mot.
+hard_skills:
+  '\bitil\b': 15
+  '\bdelivery\b': 15
+  '\binfog[eé]rance\b': 15
+  '\bsla\b': 10
+  '\bkpi\b': 8
+  '\bincident\b': 8
+  '\bcopil\b': 5
+  '\bt[eé]l[eé]com\b': 10
+  '\bb2b\b': 8
+  '\b(?:xdsl|thd|lte|4g|5g)\b': 5
+  '\baws\b': 8
+  '\bpython\b': 8
+  '\betl\b': 8
+  '\bairflow\b': 5
+  '\bmongo\b': 5
+  '\bmanagement d.[eé]quipe\b': 10
+  '\bpmo\b': 8
+  '\bgestion de projets?\b': 10
+  '\bpilotage\b': 8
+  '\bagile\b': 8
+  '\bscrum\b': 8
+  '\bjira\b': 5
+  '\bmoa\b': 8
+  '\bmoe\b': 5
+  '\broadmap\b': 5
+  '\bbacklog\b': 5
+  '\bbudget\b': 5
+  '\bplanning\b': 5
+  '\b(?:prince2|pmp)\b': 5
+  '\bsql\b': 8
+  '\bspark\b': 5
+  '\bkafka\b': 5
+  '\b(?:snowflake|dbt)\b': 5
+  '\b(?:azure|gcp)\b': 5
+  '\bdocker\b': 5
+  '\bpower bi\b': 5
+
+soft_skills:
+  '\bmanagement\b': 20
+  '\binternational\b': 15
+  '\bmulti[- ]sites?\b': 15
+  '\banglais\b': 15
+  '\bencadrement\b': 10
+  '\b(?:gouvernance|governance)\b': 10
+  '\btransversal\b': 10
+  '\brelation client\b': 10
+
+# --- Zone géographique ---------------------------------------------------------
+location:
+  center: {city: 'Nantes', insee: '44109', lat: 47.2184, lon: -1.5536}  # insee : code commune (pas le code postal)
+  radius_km: 50                      # France Travail et APEC
+  home: 'Nort-sur-Erdre'             # lieu → score 100
+  core_cities: [Nantes, Saint-Herblain, Rezé, Vertou, Carquefou, Orvault, Saint-Sébastien, Bouguenais, La Chapelle-sur-Erdre]   # → 90
+  area_cities: [Ancenis, Clisson, Châteaubriant, Saint-Nazaire, Pornic, Blain, Guérande, Sainte-Luce-sur-Loire, Basse-Goulaine, Treillières, Sautron, Couëron, Bouaye, Thouaré-sur-Loire, Les Sorinières, Sucé-sur-Erdre, Grandchamp, Saint-Jean-de-Boiseau, Haute-Goulaine]   # → 75
+  departments: ['44']                # reste du département → 60 ; code postal hors liste → 30
+  department_names: [Loire-Atlantique]
+  search_departments: ['44', '49', '85', '35']   # filtre des offres APEC / Hellowork (~ rayon)
+
+# --- Requêtes envoyées aux sources ---------------------------------------------
+search:
+  jobspy_queries:                    # Indeed / Google Jobs, autour de location.center
+    - Service Delivery Manager
+    - Chef de projet IT
+    - Chef de projet digital
+    - PMO
+    - Product Manager
+    - Data Engineer
+    - Responsable production informatique
+    - Responsable opérationnel de comptes
+  apec_keywords:
+    - service delivery manager
+    - chef de projet informatique
+    - PMO
+    - product owner
+    - data engineer
+    - responsable opérationnel de comptes
+    - responsable de contrat infogérance
+  # Codes métier ROME (https://www.francetravail.fr → fiches métiers ROME)
+  france_travail_rome: [M1806, M1802, M1805, M1811, M1810]
+
+# --- Filtres --------------------------------------------------------------------
+filters:
+  it_only: true    # écarte BTP / industrie / marketing / RH… — false pour un profil non IT

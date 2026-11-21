@@ -1,5 +1,5 @@
 # Veille implantations (commande `job-hunter implantations`)
-# Signal visé : NOUVEL établissement secondaire en Loire-Atlantique d'une entreprise
+# Signal visé : NOUVEL établissement secondaire dans `departement` d'une entreprise
 # déjà significative (≥ 50 salariés au niveau de l'unité légale, ou ETI/GE).
 
 departement: "44"
@@ -24,5 +24,6 @@ naf_prefixes:
   "72": "R&D"
   "82.20": "Centres d'appels / services clients"
 
-# Distance calculée depuis le centre de Nantes (km, colonne indicative, pas un filtre)
-nantes_lambert93: [355400, 6689400]
+# Centre de référence pour la colonne « Km centre » (indicative, pas un filtre), en
+# Lambert-93 (EPSG:2154) — ex. Nantes [355400, 6689400], Paris [652000, 6862000].
+centre_lambert93: [355400, 6689400]

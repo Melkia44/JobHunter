@@ -143,8 +143,15 @@ _LI_NOISE_RE = re.compile(
 # dernièrement ») → dédup par (titre, entreprise, lieu).
 
 _HW_LOC_RE = re.compile(r"^.+ - (\d{2,3}|2[AB])$")
-_HW_ZONE_DEPTS = {"44", "49", "85", "35"}  # Nantes + ~50 km, comme le collecteur APEC
 _HW_SALARY_RE = re.compile(r"([\d\s  ]+)\s*-\s*([\d\s  ]+)\s*€\s*/\s*an")
+
+
+def _hw_zone_depts() -> set[str]:
+    """Départements acceptés (profile.yaml › location.search_departments, ~ le rayon)."""
+    from job_hunter.profile import get_profile
+
+    zone = get_profile().location
+    return set(zone.search_departments or zone.departments)
 
 
 def parse_hellowork(html: str, posted: date | None) -> list[RawJob]:
@@ -186,7 +193,7 @@ def parse_hellowork(html: str, posted: date | None) -> list[RawJob]:
         loc_m = next((m for c in card[1:] if (m := _HW_LOC_RE.match(c))), None)
         if loc_m is None:
             continue  # pas une carte d'offre (liens de pied de mail : « Espace candidat »…)
-        if loc_m.group(1) not in _HW_ZONE_DEPTS:
+        if loc_m.group(1) not in _hw_zone_depts():
             continue  # offres « publiées dernièrement » hors zone (Dijon, Yvelines…)
         location = loc_m.group(0)
         contract = next((c for c in card[1:] if c in ("CDI", "CDD", "Intérim", "Stage", "Alternance", "Freelance")), None)

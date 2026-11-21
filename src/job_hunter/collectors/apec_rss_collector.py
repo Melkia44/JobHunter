@@ -5,9 +5,10 @@ que l'alerte email — constaté 2026-07-05). On interroge donc l'endpoint JSON 
 site appelle lui-même : POST cms/webservices/rechercheOffre. Bien plus riche que le
 RSS (entreprise, lieu, salaire, description, URL directe).
 
-Filtre géographique côté client sur `lieuTexte` (« Nantes - 44 ») : l'API filtre par
-code géo interne qu'on ne récupère pas (autocomplétion protégée DataDome). On garde
-la zone Nantes + ~50 km (départements 44/49/85/35).
+Filtre géographique côté client : distance au centre du profil (lat/lon de l'offre) ≤
+radius_km, repli sur location.departments si l'offre n'est pas géolocalisée. L'API filtre
+par code géo interne qu'on ne récupère pas (autocomplétion protégée DataDome).
+Mots-clés : profile.yaml › search.apec_keywords.
 
 Nom de fichier conservé (apec_rss_collector) pour ne pas toucher au dispatch cli.py ;
 le RSS n'est plus utilisé. source='apec_rss' inchangé (mappings modèles/Sheet).
@@ -27,24 +28,12 @@ from loguru import logger
 
 from job_hunter.config import Settings
 from job_hunter.models import RawJob
+from job_hunter.profile import get_profile
 
 SEARCH_URL = "https://www.apec.fr/cms/webservices/rechercheOffre"
 DETAIL_URL = "https://www.apec.fr/candidat/recherche-emploi.html/emploi/detail-offre/{}"
 
-# Requêtes plein-texte alignées sur le profil (mêmes intentions que jobspy/target_titles)
-KEYWORDS = (
-    "service delivery manager",
-    "chef de projet informatique",
-    "PMO",
-    "product owner",
-    "data engineer",
-    "responsable opérationnel de comptes",  # ROC = SDM côté ESN (08/10/2026)
-    "responsable de contrat infogérance",
-)
 CDI_CODE = "101888"          # CONTRACT_TYPE_FILTERING : CDI
-NANTES_LATLON = (47.2184, -1.5536)
-ZONE_KM = 50.0               # même rayon que France Travail (commune 44109 + 50 km)
-ZONE_DEPTS = {"44"}          # repli conservateur (dépt de Nantes) si l'offre n'a pas de coordonnées
 PAGE_SIZE = 100
 MAX_PAGES = 2                # 200 offres récentes / mot-clé, triées par date
 TIMEOUT_S = 20.0
@@ -61,7 +50,7 @@ def collect(settings: Settings) -> list[RawJob]:  # noqa: ARG001 — signature h
     """Collecte paginée multi-mots-clés, filtrée sur la zone, dédupliquée par n° d'offre."""
     offers: dict[str, RawJob] = {}
     with httpx.Client(timeout=TIMEOUT_S, headers=_HEADERS) as client:
-        for kw in KEYWORDS:
+        for kw in get_profile().search.apec_keywords:
             for page in range(MAX_PAGES):
                 data = _search(client, kw, page)
                 if data is None:
@@ -74,7 +63,7 @@ def collect(settings: Settings) -> list[RawJob]:  # noqa: ARG001 — signature h
                 if (page + 1) * PAGE_SIZE >= data.get("totalCount", 0) or not resultats:
                     break
 
-    logger.info(f"apec : {len(offers)} offres uniques (≤ {ZONE_KM:.0f} km de Nantes, CDI)")
+    logger.info(f"apec : {len(offers)} offres uniques (≤ {get_profile().location.radius_km} km de {get_profile().location.center.city}, CDI)")
     return list(offers.values())
 
 
@@ -136,16 +125,17 @@ def _to_raw_job(offer: dict[str, Any]) -> RawJob | None:
 
 
 def _in_zone(offer: dict[str, Any]) -> bool:
-    """Vrai si l'offre est à ≤ 50 km de Nantes (haversine sur lat/lon de l'API).
-    Repli sur le département du lieuTexte si l'offre n'est pas géolocalisée."""
+    """Vrai si l'offre est à ≤ radius_km du centre du profil (haversine sur lat/lon de
+    l'API). Repli sur location.departments si l'offre n'est pas géolocalisée."""
+    zone = get_profile().location
     lat, lon = offer.get("latitude"), offer.get("longitude")
     if offer.get("localisable") and lat is not None and lon is not None:
         try:  # l'API renvoie lat/lon en chaînes
-            return _haversine_km(NANTES_LATLON, (float(lat), float(lon))) <= ZONE_KM
+            return _haversine_km((zone.center.lat, zone.center.lon), (float(lat), float(lon))) <= zone.radius_km
         except (TypeError, ValueError):
             pass
     m = _DEPT_RE.search(offer.get("lieuTexte") or "")
-    return bool(m) and m.group(1) in ZONE_DEPTS
+    return bool(m) and m.group(1) in zone.departments
 
 
 def _haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:

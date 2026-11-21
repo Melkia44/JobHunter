@@ -1,5 +1,12 @@
 """Fixtures partagées des tests Phase 3."""
+import os
+from pathlib import Path
+
 import pytest
+
+# Profil figé pour les tests (profil d'exemple SDM/Nantes) : les tests ne dépendent pas
+# de data/profile.yaml, que chacun adapte. Posé avant tout get_settings() (mis en cache).
+os.environ["PROFILE_YAML"] = str(Path(__file__).parent / "fixtures" / "profile.yaml")
 
 from job_hunter.models import Employer, RawJob
 

@@ -48,7 +48,7 @@ def test_keeps_esn_group(cfg):
     assert i.entreprise == "ACME CONSULTING"
     assert i.secteur.startswith("Programmation")
     assert i.effectif_groupe == "250-499"
-    assert i.km_nantes == 0
+    assert i.km_centre == 0
     assert i.url.endswith("12345678900011")
 
 
@@ -76,12 +76,12 @@ def test_drops_closed(cfg):
 
 def test_distance_saint_nazaire(cfg):
     [i] = imp.select([_etab(x="307000", y="6700000")], cfg)
-    assert 45 <= i.km_nantes <= 55
+    assert 45 <= i.km_centre <= 55
 
 
 def test_missing_coords(cfg):
     [i] = imp.select([_etab(x=None, y=None)], cfg)
-    assert i.km_nantes is None
+    assert i.km_centre is None
 
 
 def test_fetch_paginates(monkeypatch):

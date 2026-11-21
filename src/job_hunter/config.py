@@ -41,15 +41,11 @@ class Settings(BaseSettings):
     db_path: Path = _REPO_ROOT / "data" / "seen_jobs.db"
     service_account_path: Path = _REPO_ROOT / "secrets" / "service_account.json"
     employers_yaml: Path = _REPO_ROOT / "data" / "employers.yaml"
-    target_titles_yaml: Path = _REPO_ROOT / "data" / "target_titles.yaml"
+    profile_yaml: Path = _REPO_ROOT / "data" / "profile.yaml"  # métiers, compétences, zone, sources
     implantations_yaml: Path = _REPO_ROOT / "data" / "implantations.yaml"
 
     # Veille implantations : fenêtre glissante (Sirene enregistre avec retard)
     implantations_lookback_days: int = 60
-
-    # Café Emploi → Sheet : dossier Drive « CafeEmploi-inbox » (partagé en lecture avec le SA)
-    cafe_inbox_folder_id: str = "1iBTexMFLte1hW3lo4NwGYjVKdRmBFLZT"
-    relance_days: int = 7
 
 
 def get_settings() -> Settings:

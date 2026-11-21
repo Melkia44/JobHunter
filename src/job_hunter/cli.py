@@ -66,7 +66,8 @@ def main(
 
 @app.command()
 def setup() -> None:
-    """Affiche la config, initialise la DB dédup, valide l'auth Google Sheets."""
+    """Affiche la config, initialise la DB dédup, valide l'auth Google Sheets et crée les onglets manquants."""
+    from job_hunter.collectors.careers_sites_collector import load_employers
     from job_hunter.dedup import SeenJobsDB
 
     s = get_settings()
@@ -78,6 +79,14 @@ def setup() -> None:
         f"france_travail_secret    = {'***' if s.france_travail_client_secret else '(non défini)'}"
     )
     logger.info(f"min_score                = {s.min_score} (tier-1 : {s.min_score_tier1})")
+    from job_hunter.profile import get_profile
+
+    prof = get_profile()
+    logger.info(
+        f"profil                   = {s.profile_yaml.name} : {len(prof.titles)} intitulé(s), "
+        f"zone {prof.location.center.city} {prof.location.radius_km} km, "
+        f"sources {', '.join(prof.sources)}"
+    )
     sa = s.service_account_path
     logger.info(
         f"service_account          = {sa} ({'présent' if sa.exists() else 'absent'})"
@@ -87,8 +96,10 @@ def setup() -> None:
     try:
         from job_hunter.sheet_writer import SheetWriter  # import paresseux (googleapiclient)
 
-        title = SheetWriter(s).check_access()
+        writer = SheetWriter(s)
+        title = writer.check_access()
         logger.info(f"Auth Google Sheets OK — classeur : « {title} »")
+        writer.init_tabs(load_employers(s.employers_yaml))
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"Auth Google Sheets NON validée : {exc}")
         logger.warning("Rappel : le Sheet doit être partagé en Éditeur avec l'email du SA (sinon 403)")
@@ -99,7 +110,7 @@ def run(
     sources: list[str] | None = typer.Option(
         None,
         "--sources",
-        help="jobspy | france_travail | apec | careers_sites | email_alerts (défaut : toutes)",
+        help="jobspy | france_travail | apec | careers_sites | email_alerts (défaut : profile.yaml › sources)",
     ),
     include_linkedin: bool = typer.Option(
         False, "--include-linkedin", help="LinkedIn via JobSpy — local uniquement"
@@ -118,13 +129,14 @@ def run(
     from job_hunter.reporter import report
     from job_hunter.scoring import aggregator
     from job_hunter.scoring.tier import find_employer
-    from job_hunter.scoring.title_match import load_target_titles
+    from job_hunter.profile import get_profile
 
     s = get_settings()
+    prof = get_profile()
     threshold = min_score if min_score is not None else s.min_score
     alerts: list[str] = []
 
-    selected = list(sources) if sources else list(base.SOURCES)
+    selected = list(sources) if sources else list(prof.sources)
     for src in selected:
         if src not in base.SOURCES:
             logger.error(f"source inconnue : {src} (attendu : {', '.join(base.SOURCES)})")
@@ -172,10 +184,11 @@ def run(
     all_jobs = kept
 
     # --- Filtre domaine : écarte les métiers hors IT (CVC, BTP, HSE, marketing…) ---
-    kept = [j for j in all_jobs if not base.is_off_domain(j)]
-    if len(all_jobs) - len(kept):
-        logger.info(f"filtre domaine : {len(all_jobs) - len(kept)} offre(s) hors IT écartée(s)")
-    all_jobs = kept
+    if prof.filters.it_only:
+        kept = [j for j in all_jobs if not base.is_off_domain(j)]
+        if len(all_jobs) - len(kept):
+            logger.info(f"filtre domaine : {len(all_jobs) - len(kept)} offre(s) hors IT écartée(s)")
+        all_jobs = kept
 
     # --- Dédup (les nouveautés ne sont PAS encore marquées : cf. docstring) ---
     db = SeenJobsDB(s.db_path)
@@ -202,7 +215,7 @@ def run(
 
     # --- Scoring ---
     employers = load_employers(s.employers_yaml)
-    targets = load_target_titles(s.target_titles_yaml)
+    targets = prof.target_names()
     new_scored = [aggregator.score_job(j, employers, targets) for _, j in new_jobs]
     retained = [
         sj for sj in new_scored if aggregator.passes_threshold(sj, threshold, s.min_score_tier1)
@@ -217,6 +230,7 @@ def run(
             from job_hunter.sheet_writer import SheetWriter  # import paresseux
 
             writer = SheetWriter(s)
+            writer.init_tabs(employers)
             appended = writer.append_offers(retained, today)
             writer.revalidate_offers()
             writer.archive_stale_offers(today, s.archive_after_days)
@@ -253,12 +267,15 @@ def implantations(
     ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Affiche les résultats sans écrire le Sheet"),
 ) -> None:
-    """Veille implantations : nouveaux établissements (Sirene) d'entreprises ≥ 50 sal. dans le 44."""
+    """Veille implantations : nouveaux établissements (Sirene) d'entreprises ≥ 50 sal. (département : implantations.yaml)."""
     from datetime import timedelta
 
     from job_hunter import implantations as imp
 
     s = get_settings()
+    if not s.insee_api_key:
+        logger.warning("INSEE_API_KEY absent : veille implantations non configurée, rien à faire")
+        return
     cfg = imp.load_config(s.implantations_yaml)
     today = date.today()
     start = date.fromisoformat(since) if since else today - timedelta(days=s.implantations_lookback_days)
@@ -268,7 +285,7 @@ def implantations(
     logger.info(f"{len(items)} implantation(s) retenue(s) sur {len(raw)} établissement(s) créé(s)")
 
     for i in items:
-        km = "?" if i.km_nantes is None else i.km_nantes
+        km = "?" if i.km_centre is None else i.km_centre
         print(f"{i.date_creation} · {i.entreprise[:40]:<40} · {i.commune[:22]:<22} · {km:>3} km"
               f" · {i.secteur} · {i.effectif_groupe}")
 
@@ -278,36 +295,9 @@ def implantations(
 
     SheetWriter(s).append_implantations(items, today)
     if not raw:
-        # 0 établissement sur 2 mois dans le 44 = panne, pas une réalité
+        # 0 établissement sur 2 mois dans le département = panne, pas une réalité
         logger.error("Sirene : 0 établissement collecté — source probablement en panne")
         raise typer.Exit(code=1)
-
-
-@app.command("sync-statuts")
-def sync_statuts(
-    dry_run: bool = typer.Option(False, "--dry-run", help="Affiche les écritures sans toucher au Sheet"),
-) -> None:
-    """Applique au Sheet les statuts changés dans Café Emploi (dossier Drive CafeEmploi-inbox)."""
-    from google.oauth2 import service_account
-
-    from job_hunter import status_sync
-    from job_hunter.sheet_writer import SheetWriter
-
-    s = get_settings()
-    writer = SheetWriter(s)
-    creds = service_account.Credentials.from_service_account_file(
-        str(s.service_account_path), scopes=["https://www.googleapis.com/auth/drive.readonly"]
-    )
-    after = writer.read_sync_watermark()
-    events, watermark = status_sync.fetch_events(creds, s.cafe_inbox_folder_id, after)
-    if not events and watermark == after:
-        logger.info("Café Emploi : rien de nouveau")
-        return
-    updates = status_sync.plan_updates(writer.read_offer_rows(), events, s.relance_days)
-    for u in updates:
-        print(f"{u['range']:<16} ← {u['values'][0][0]}")
-    if not dry_run:
-        writer.apply_status_updates(updates, watermark)
 
 
 def _blocking_alerts(alerts: list[str]) -> list[str]:

@@ -1,167 +1,175 @@
 # job-hunter
 
-Veille emploi quotidienne : collecte multi-sources (JobSpy, France Travail, API APEC,
-sites carrières, alertes mail LinkedIn / Hellowork / Indeed), déduplication persistante,
-scoring déterministe /100, écriture dans un Google Sheet + rapport CLI. Tourne via
-GitHub Actions et en local.
+Veille emploi automatique : chaque nuit, collecte des offres (Indeed, Google Jobs,
+France Travail, APEC, sites carrières, alertes mail LinkedIn / Hellowork / Indeed),
+supprime les doublons, note chaque offre sur 100 selon **ton** profil et écrit les
+meilleures dans un **Google Sheet**. Tourne gratuitement sur GitHub Actions.
 
-## Prérequis
+Tout ce qui te concerne (métiers visés, compétences, zone, sources) tient dans un seul
+fichier : [`data/profile.yaml`](data/profile.yaml). Le reste ne se touche pas.
 
-- Python 3.13 (`.python-version`, CI) — minimum supporté : 3.11
-- [uv](https://docs.astral.sh/uv/) :
-  - macOS/Linux : `curl -LsSf https://astral.sh/uv/install.sh | sh`
-  - Windows : `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+> ⚠️ Indeed, Google Jobs et l'APEC sont lus par scraping, ce que leurs CGU n'autorisent
+> pas forcément. Usage personnel, à faible volume, sous ta responsabilité.
 
-## Installation
+---
 
-```bash
-uv sync
-uv run job-hunter --help
-```
+## Démarrer (≈ 30 min, tout depuis le navigateur)
 
-## Configuration
+### 1. Ton propre dépôt
 
-### 1. Fichier `.env`
+Sur la page du dépôt : **Use this template → Create a new repository**, visibilité
+**Private** (ton profil de recherche n'a pas à être public).
 
-```bash
-cp .env.example .env   # puis remplir les valeurs
-```
+### 2. Ton profil
 
-### 2. Google Sheets — Service Account
+Dans ton dépôt, ouvre `data/profile.yaml` → ✏️ (modifier) et remplace le profil
+d'exemple (SDM / chef de projet IT autour de Nantes) par le tien. Chaque bloc est
+commenté. L'essentiel :
 
-1. Créer un projet GCP dédié, activer l'**API Google Sheets**.
-2. Créer un Service Account (aucun rôle IAM projet nécessaire), générer une **clé JSON**.
-3. Placer la clé dans `./secrets/service_account.json` (dossier gitignored).
-4. **Partager le Google Sheet cible** avec l'email du SA
-   (`xxx@yyy.iam.gserviceaccount.com`) en droits **Éditeur**.
-   ⚠️ Sans ce partage, l'API renvoie **403** — c'est l'erreur la plus fréquente.
-
-### 3. France Travail
-
-Créer une application sur [francetravail.io](https://francetravail.io) avec l'API
-« Offres d'emploi v2 » (scope `api_offresdemploiv2 o2dsoffre`), récupérer
-`client_id` / `client_secret` → `.env`.
-
-### 4. APEC
-
-Rien à configurer : le RSS APEC n'existe plus (07/2026). Le collecteur interroge l'API
-JSON publique du site (`rechercheOffre`) avec des mots-clés définis dans
-`collectors/apec_rss_collector.py` (`KEYWORDS`), puis filtre sur 44/49/85/35.
-⚠️ APEC est derrière DataDome : depuis l'IP de GitHub Actions les requêtes peuvent
-être rejetées en **403**. Panne **non bloquante** : signalée (log + onglet Sources NOK)
-sans faire échouer le run.
-
-### 5. Alertes mail (LinkedIn, Hellowork, Indeed)
-
-1. Boîte Gmail dédiée, IMAP activé, **mot de passe d'application** Google.
-2. Créer les alertes sur chaque plateforme avec cette adresse (ou transférer).
-3. `ALERTS_IMAP_USER` / `ALERTS_IMAP_PASSWORD` dans `.env` et en secrets GitHub.
-
-Lecture seule (aucun mail marqué lu), fenêtre glissante `ALERTS_LOOKBACK_DAYS` (3 j).
-Seuls ces expéditeurs exacts sont parsés — tout autre mail est ignoré :
-
-| Plateforme | Expéditeur |
+| Bloc | À renseigner |
 |---|---|
-| LinkedIn | `jobalerts-noreply@linkedin.com` |
-| Hellowork | `alerte@emails.hellowork.com` |
-| Indeed | `donotreply@jobalert.indeed.com` |
+| `sources` | Les sources que tu as configurées (commence par `jobspy`, `france_travail`, `apec`) |
+| `titles` | Intitulés visés, avec un poids (100 = cœur de cible) |
+| `hard_skills` / `soft_skills` | Mots-clés qui rapportent des points dans les descriptions |
+| `location` | Ville centre (code commune **INSEE**, lat/lon), rayon, villes proches, départements |
+| `search` | Requêtes Indeed/Google, mots-clés APEC, codes métier **ROME** France Travail |
+| `filters.it_only` | `true` écarte les métiers hors IT. **`false` pour un profil non IT** |
 
-Ajouter une plateforme = un expéditeur dans `SENDERS` + un parseur + une fixture `.eml`.
+Les codes ROME se trouvent sur [francetravail.fr](https://www.francetravail.fr) (fiches
+métiers) et le code INSEE d'une commune sur [insee.fr](https://www.insee.fr/fr/recherche/recherche-geographique)
+(≠ code postal : Paris = 75056, Boulogne-Billancourt = 92012).
 
-## Utilisation
+Astuce : colle le fichier dans Claude avec ton CV ou ta fiche de poste visée et
+demande-lui de l'adapter.
 
-```bash
-uv run job-hunter setup                          # vérifie config + prérequis
-uv run job-hunter run                            # run complet (sans LinkedIn)
-uv run job-hunter run --dry-run                  # pas d'écriture Sheet
-uv run job-hunter run --sources france_travail   # une source seule (debug)
-uv run job-hunter run --min-score 55             # override du seuil
-uv run job-hunter -v run --dry-run               # logs DEBUG + dump des RawJob
-./run_locally.sh --include-linkedin              # LinkedIn — LOCAL UNIQUEMENT
-```
+### 3. Google Sheet + compte de service
 
-Sources : `jobspy`, `france_travail`, `apec`, `careers_sites`, `email_alerts`.
+1. Crée un Google Sheet **vide** ; son ID est dans l'URL : `docs.google.com/spreadsheets/d/<ID>/edit`.
+2. [console.cloud.google.com](https://console.cloud.google.com) → nouveau projet →
+   *API et services* → activer **Google Sheets API**.
+3. *IAM → Comptes de service* → créer (aucun rôle) → *Clés* → **Ajouter une clé JSON**
+   (un fichier se télécharge).
+4. **Partage le Sheet** avec l'email du compte de service
+   (`xxx@yyy.iam.gserviceaccount.com`) en **Éditeur**.
+   Sans ce partage : erreur **403**, de loin la plus fréquente.
 
-LinkedIn (scraping JobSpy) n'est **jamais** activé sur GitHub Actions (IP cloud = ban
-rapide). Les alertes mail LinkedIn, elles, tournent en CI.
+Les onglets (Offres, Cibles, Repères & pipeline, Sources) sont créés au premier run.
 
-## Comportement du pipeline
+### 4. France Travail
 
-collecte → filtre **CDI uniquement** → filtre **hors IT** → dédup (empreinte
-employeur + intitulé) → scoring → seuil (`MIN_SCORE` 65, `MIN_SCORE_TIER1` 58 pour
-les employeurs cibles) → Sheet.
+[francetravail.io](https://francetravail.io) → créer une application → API
+**« Offres d'emploi v2 »** → noter `client_id` / `client_secret`.
 
-À chaque run, l'onglet **Offres** est aussi : revalidé (lignes « Nouvelle » qui ne
-passent plus les filtres → archivées, motif en col. M), purgé (« Nouvelle » > 30 j →
-« Archivée »), trié (plus récentes en haut). Onglets mis à jour : **Cibles**,
-**Repères & pipeline**, **Sources** (état OK/NOK par source).
+### 5. Secrets GitHub
 
-Les offres nouvelles ne sont marquées vues qu'après écriture Sheet réussie.
-
-**Run volontairement en échec** si une source lève une erreur ou remonte 0 offre
-(sauf sources listées dans `NON_BLOCKING_SOURCES`, aujourd'hui `apec`) :
-GitHub notifie par mail, les offres des autres sources sont déjà écrites et la DB
-dédup est quand même commitée.
-
-## Planification (GitHub Actions)
-
-| Workflow | Cron (UTC) | Rôle |
-|---|---|---|
-| `daily.yml` | `47 22 * * *` (≈ 00h47 Paris été) | `run` complet, sans LinkedIn |
-| `implantations.yml` | `47 4 * * 1` (lundi) | veille Sirene |
-| `sync-statuts.yml` | `17 * * * *` | synchro Café Emploi |
-
-GitHub retarde souvent les crons de plusieurs heures. Lancement manuel du daily :
-option `dry_run` = **alertes mail uniquement**, aucune écriture.
-
-## CI — Secrets GitHub Actions
-
-Repo → Settings → Secrets and variables → Actions :
+Dépôt → *Settings → Secrets and variables → Actions → New repository secret* :
 
 | Secret | Contenu |
 |---|---|
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | JSON complet de la clé du SA |
-| `FRANCE_TRAVAIL_CLIENT_ID` | Client ID francetravail.io |
-| `FRANCE_TRAVAIL_CLIENT_SECRET` | Client Secret |
-| `SPREADSHEET_ID` | ID du Sheet cible |
-| `ALERTS_IMAP_USER` | Boîte dédiée aux alertes mail (LinkedIn, Hellowork, Indeed) |
-| `ALERTS_IMAP_PASSWORD` | Mot de passe d'application Google de cette boîte |
-| `INSEE_API_KEY` | Clé API Sirene (workflow implantations) |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Contenu **complet** du fichier JSON de l'étape 3 |
+| `SPREADSHEET_ID` | ID du Sheet |
+| `FRANCE_TRAVAIL_CLIENT_ID` | client_id |
+| `FRANCE_TRAVAIL_CLIENT_SECRET` | client_secret |
+| `ALERTS_IMAP_USER` / `ALERTS_IMAP_PASSWORD` | *Optionnel*, cf. « Alertes mail » |
+| `INSEE_API_KEY` | *Optionnel*, cf. « Veille implantations » |
 
-Vérifier aussi Settings → Actions → General → Workflow permissions =
-**Read and write** (le workflow commit `data/seen_jobs.db` après chaque run).
+Puis *Settings → Actions → General → Workflow permissions* = **Read and write**
+(le run commite sa base anti-doublons `data/seen_jobs.db`).
 
-## Tests
+### 6. Premier run
+
+*Actions → Daily Job Hunt → Run workflow* :
+1. coche **dry_run** → collecte + scoring sans rien écrire ; le résumé du run liste
+   le top 3 et les éventuelles erreurs de config ;
+2. relance **sans** dry_run → les offres arrivent dans le Sheet.
+
+Ensuite, ça tourne seul chaque nuit (≈ 00h Paris, souvent retardé de quelques heures
+par GitHub).
+
+---
+
+## Régler la sélection
+
+- **Trop peu d'offres** : baisser `MIN_SCORE` (défaut 65), élargir `titles` /
+  `jobspy_queries`, ajouter des `hard_skills`.
+- **Trop de bruit** : retirer les requêtes ambiguës, passer les intitulés flous en
+  `gated: true` (profil IT), monter `MIN_SCORE`.
+
+Seuils : variables `MIN_SCORE` / `MIN_SCORE_TIER1` (dans `.env` en local ; en CI, les
+défauts 65 / 58 s'appliquent, ajouter `MIN_SCORE: "60"` dans `env:` de `daily.yml`
+pour changer).
+
+Score /100 = intitulé 30 % · compétences 25 % · localisation 20 % · employeur cible
+15 % · soft skills 10 % (sans description : intitulé 55 % · localisation 30 % ·
+employeur 15 %).
+
+## Comportement
+
+collecte → **CDI uniquement** → filtre hors IT (si `it_only`) → dédup (employeur +
+intitulé) → score → seuil → Sheet.
+
+À chaque run, l'onglet **Offres** est aussi revalidé (lignes « Nouvelle » devenues
+hors critères → « Archivée », motif en colonne M), purgé (« Nouvelle » > 30 j →
+« Archivée ») et trié (récentes en haut). Change toi-même la colonne **Statut**
+(Postulée, Entretien…) : l'outil ne touche qu'aux lignes « Nouvelle ».
+
+**Run en échec (mail GitHub)** si une source plante ou remonte 0 offre — sauf l'APEC,
+souvent bloquée (403) depuis les serveurs GitHub : signalée dans l'onglet Sources sans
+faire échouer le run. Une source listée dans `profile.yaml › sources` mais non
+configurée fait donc échouer chaque run : ne liste que ce que tu as configuré.
+
+LinkedIn n'est **jamais** scrapé depuis GitHub (ban rapide) : passer par les alertes
+mail, ou en local `./run_locally.sh --include-linkedin`.
+
+---
+
+## Options
+
+### Alertes mail (LinkedIn, Hellowork, Indeed)
+
+1. Boîte Gmail **dédiée**, IMAP activé, **mot de passe d'application** Google
+   (compte Google → Sécurité → Validation en 2 étapes → Mots de passe des applications).
+2. Crée tes alertes sur LinkedIn / Hellowork / Indeed avec cette adresse (ou transfère-les).
+3. Secrets `ALERTS_IMAP_USER` / `ALERTS_IMAP_PASSWORD`, et ajoute `email_alerts` dans
+   `profile.yaml › sources`.
+
+Lecture seule (aucun mail marqué lu), 3 derniers jours à chaque run. Les alertes
+d'autres plateformes sont ignorées (un parseur par gabarit de mail :
+`collectors/email_alerts_collector.py`).
+
+### Employeurs cibles et sites carrières
+
+`data/employers.yaml` (vide par défaut) : bonus de score pour les employeurs listés
+(P1/P2/P3) et, avec `careers_url` + `ats` (SmartRecruiters, Teamtailor, Greenhouse,
+Lever, Cegid…), lecture directe de leur site carrières → ajouter `careers_sites` dans
+les sources. Format en commentaire dans le fichier ; exemple complet :
+`tests/fixtures/employers.yaml`.
+
+### Veille implantations (hebdo)
+
+Nouveaux établissements d'entreprises ≥ 50 salariés dans un département, secteurs en
+liste blanche → onglet **Implantations** (cible : candidatures spontanées).
+Régler `departement` et `centre_lambert93` dans `data/implantations.yaml`, clé
+[portail-api.insee.fr](https://portail-api.insee.fr) → **API Sirene** → secret
+`INSEE_API_KEY`. Sans clé, le workflow du lundi ne fait rien.
+
+---
+
+## En local (optionnel)
+
+Prérequis : [uv](https://docs.astral.sh/uv/) (installe Python 3.13 tout seul).
 
 ```bash
-uv run pytest -v
+uv sync
+cp .env.example .env                 # remplir ; clé JSON → secrets/service_account.json
+uv run job-hunter setup              # vérifie config + accès Sheet, crée les onglets
+uv run job-hunter run --dry-run      # tout le pipeline, sans écriture
+uv run job-hunter run --sources france_travail --dry-run   # une source (debug)
+uv run job-hunter -v run --dry-run   # + logs détaillés et offres brutes
+uv run job-hunter run --min-score 55
+uv run pytest                        # tests (profil figé : tests/fixtures/profile.yaml)
 ```
 
-Périmètre testé : normalisation, dédup, scoring (titre, hard skills, lieu, tier,
-agrégation), filtres déchet, revalidation, parseurs d'alertes mail (fixtures `.eml`
-anonymisées dans `tests/fixtures/alerts/`), lieu des sites carrières, implantations,
-synchro statuts, alertes CLI. Les collecteurs réseau (JobSpy, France Travail, APEC,
-sites carrières) se testent via `run --sources X --dry-run` sur données réelles.
+## Licence
 
-## Veille implantations (hebdo)
-
-Nouveaux établissements secondaires dans le 44 d'entreprises ≥ 50 salariés (ou ETI/GE),
-secteurs en liste blanche (`data/implantations.yaml`) → onglet **Implantations** du Sheet
-(créé au 1er run, dédup par SIRET). Cible : candidatures spontanées.
-
-1. Clé : [portail-api.insee.fr](https://portail-api.insee.fr) → créer une application →
-   souscrire **API Sirene** → `INSEE_API_KEY` dans `.env` et en secret GitHub.
-2. Calibrage sur l'historique : `uv run job-hunter implantations --since 2026-03-01 --dry-run`
-3. Run : `uv run job-hunter implantations` — planifié le lundi (`implantations.yml`).
-
-## Suivi des candidatures depuis Café Emploi (synchro horaire)
-
-Changer un statut dans Café Emploi dépose un JSON dans le dossier Drive
-`CafeEmploi-inbox` ; `job-hunter sync-statuts` (workflow horaire `sync-statuts.yml`)
-l'applique à l'onglet Offres : Statut (K), Date candidature (N, si vide, sur « Postulée »),
-Relance le (O = +7 j). Filigrane dans l'onglet `Sync` (créé au 1er run).
-Test : `uv run job-hunter sync-statuts --dry-run`.
-
-Mise en place (une fois) :
-1. GCP du compte de service : activer l'**API Google Drive**.
-2. Partager le dossier Drive `CafeEmploi-inbox` avec l'email du SA en **Lecteur**.
+[MIT](LICENSE).

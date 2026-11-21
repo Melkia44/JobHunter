@@ -22,6 +22,7 @@ from selectolax.parser import HTMLParser, Node
 
 from job_hunter.config import Settings
 from job_hunter.models import Employer, RawJob
+from job_hunter.normalizer import normalize
 
 HEADERS = {
     "User-Agent": (
@@ -175,11 +176,32 @@ def _city_after_france(text: str) -> str | None:
 # --- Cegid « profils.org » : Arkéa + Docaposte (rendu serveur, parser partagé) --
 
 _CEGID_DATE_RE = re.compile(r"\b(\d{2})/(\d{2})/(\d{4})\b")
-# Villes de la zone pour les filtres client des scrapers API (lower, sans accents stricts)
-_ZONE_CITIES = (
-    "nantes", "saint-herblain", "st-herblain", "carquefou", "ancenis",
-    "saint-nazaire", "reze", "rezé", "orvault", "vertou",
-)
+def _zone_cities() -> tuple[str, ...]:
+    """Villes de la zone (profile.yaml › location) pour les filtres client des scrapers :
+    forme brute en minuscules (« rezé ») + forme normalisée (« reze », « saint-herblain »)."""
+    from job_hunter.profile import get_profile
+
+    zone = get_profile().location
+    raw = [zone.home, zone.center.city, *zone.core_cities, *zone.area_cities]
+    out: list[str] = []
+    for c in raw:
+        if c:
+            for v in (c.lower(), normalize(c), normalize(c).replace(" ", "-")):
+                if v not in out:
+                    out.append(v)
+    return tuple(out)
+
+
+def _center_city() -> str:
+    from job_hunter.profile import get_profile
+
+    return get_profile().location.center.city.lower()
+
+
+def _zone_cp_prefixes() -> tuple[str, ...]:
+    from job_hunter.profile import get_profile
+
+    return tuple(get_profile().location.departments)
 
 
 def _scrape_cegid(client: httpx.Client, emp: Employer) -> list[RawJob]:
@@ -250,7 +272,7 @@ def _scrape_smartrecruiters(client: httpx.Client, emp: Employer) -> list[RawJob]
             f"https://api.smartrecruiters.com/v1/companies/{slug}/postings",
             # q est le seul filtre documenté fiable ; les params city/country testés le
             # 05/07 vidaient la réponse (fix post-STOP). Le filtre client fait foi.
-            params={"q": "nantes", "limit": 100, "offset": offset},
+            params={"q": _center_city(), "limit": 100, "offset": offset},
         )
         resp.raise_for_status()
         data = resp.json()
@@ -259,9 +281,9 @@ def _scrape_smartrecruiters(client: httpx.Client, emp: Employer) -> list[RawJob]
         for p in content:
             loc = p.get("location") or {}
             city = (loc.get("city") or "").lower()
-            cp44 = str(loc.get("postalCode") or "").startswith("44")
+            cp_zone = bool(_zone_cp_prefixes()) and str(loc.get("postalCode") or "").startswith(_zone_cp_prefixes())
             remote = bool(loc.get("remote"))
-            if not (remote or cp44 or any(z in city for z in _ZONE_CITIES)):
+            if not (remote or cp_zone or any(z in city for z in _zone_cities())):
                 continue
             pid = str(p.get("id") or "")
             title = (p.get("name") or "").strip()
@@ -337,7 +359,7 @@ def _scrape_greenhouse(client: httpx.Client, emp: Employer) -> list[RawJob]:
     for j in resp.json().get("jobs") or []:
         loc_name = ((j.get("location") or {}).get("name") or "").strip()
         low = loc_name.lower()
-        if not any(z in low for z in (*_ZONE_CITIES, "remote", "télétravail", "teletravail")):
+        if not any(z in low for z in (*_zone_cities(), "remote", "télétravail", "teletravail")):
             continue
         title = (j.get("title") or "").strip()
         url = (j.get("absolute_url") or "").strip()
@@ -427,7 +449,7 @@ def _scrape_lever(client: httpx.Client, emp: Employer) -> list[RawJob]:
     for p in resp.json() or []:
         loc = ((p.get("categories") or {}).get("location") or "").strip()
         low = loc.lower()
-        if not any(z in low for z in (*_ZONE_CITIES, "remote")):
+        if not any(z in low for z in (*_zone_cities(), "remote")):
             continue
         title = (p.get("text") or "").strip()
         url = (p.get("hostedUrl") or "").strip()
@@ -678,11 +700,14 @@ def _extract_location(text: str) -> str:
     Priorité aux villes de la zone, puis CP suivi d'un nom de ville capitalisé (évite
     les faux positifs type « 35000 collaborateurs »). Rien de sûr → '' (plancher)."""
     low = text.lower()
-    for city in _ZONE_CITIES:
+    for city in _zone_cities():
         if city in low:
             return city.title()
-    if "loire-atlantique" in low or "loire atlantique" in low:
-        return "Loire-Atlantique"
+    from job_hunter.profile import get_profile
+
+    for name in get_profile().location.department_names:
+        if normalize(name) in normalize(text) or normalize(name).replace(" ", "-") in low:
+            return name
     m = re.search(r"\b(\d{5})\s+[A-ZÉÈÀ][a-zé]", text)
     if m:
         return m.group(1)  # CP brut : le scorer pénalise les CP hors 44

@@ -1,11 +1,7 @@
-from job_hunter.normalizer import normalize
-from job_hunter.scoring.title_match import (
-    DEFAULT_TARGET_TITLES,
-    load_target_titles,
-    score_title_match,
-)
+from job_hunter.profile import get_profile
+from job_hunter.scoring.title_match import score_title_match
 
-TARGETS = [normalize(t) for t in DEFAULT_TARGET_TITLES]
+TARGETS = get_profile().target_names()
 
 
 def test_exact_substring():
@@ -43,9 +39,11 @@ def test_far_title_scores_low():
     assert score_title_match("Comptable fournisseurs", TARGETS) < 60
 
 
-def test_load_falls_back_when_missing(tmp_path):
-    titles = load_target_titles(tmp_path / "absent.yaml")
-    assert "chef de projet" in titles
+def test_profil_absent_explicite(tmp_path):
+    import pytest
+
+    with pytest.raises(RuntimeError, match="Profil introuvable"):
+        get_profile(tmp_path / "absent.yaml")
 
 
 def test_synonymes_sdm_run_itsm():

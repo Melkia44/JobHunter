@@ -1,7 +1,8 @@
 """Collecteur France Travail — API Offres d'emploi v2 (OAuth2 client_credentials).
 
-Filtre géographique : Nantes (44109) + 50 km. Limitation actée : les offres full
-remote publiées hors 44 n'arrivent pas par cette source (couvertes par les autres).
+Filtre géographique : profile.yaml › location.center (code INSEE) + radius_km ; métiers :
+search.france_travail_rome. Limitation actée : les offres full remote publiées hors zone
+n'arrivent pas par cette source (couvertes par les autres).
 """
 import re
 import time
@@ -13,16 +14,12 @@ from loguru import logger
 
 from job_hunter.config import Settings
 from job_hunter.models import RawJob
+from job_hunter.profile import get_profile
 
 TOKEN_URL = "https://entreprise.francetravail.fr/connexion/oauth2/access_token"
 SEARCH_URL = "https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search"
 SCOPE = "api_offresdemploiv2 o2dsoffre"
 
-# MOA/PMO, support-SDM, études & dev (PO tech / DE), data engineering.
-# Écartés : M1803 (DSI, trop senior), M1808 (réseau/infra), E1105 (édition de livres).
-ROME_CODES = "M1806,M1802,M1805,M1811,M1810"  # + M1810 prod/exploitation SI (23/09/2026)
-COMMUNE_NANTES = "44109"
-DISTANCE_KM = 50
 PUBLIEE_DEPUIS = 3   # 72 h : couvre un run raté ; la dédup (Phase 3) absorbe les répétitions
 PAGE_SIZE = 150      # max autorisé par l'API
 MAX_PAGES = 10       # garde-fou pagination (1 500 offres — jamais atteint en pratique)
@@ -41,11 +38,15 @@ def collect(settings: Settings) -> list[RawJob]:
             "(app à créer sur francetravail.io — voir README)"
         )
 
+    prof = get_profile()
+    rome = ",".join(prof.search.france_travail_rome)
+    if not rome:
+        raise RuntimeError("profile.yaml : search.france_travail_rome vide")
     token = _get_token(settings.france_travail_client_id, settings.france_travail_client_secret)
     params: dict[str, Any] = {
-        "codeROME": ROME_CODES,
-        "commune": COMMUNE_NANTES,
-        "distance": DISTANCE_KM,
+        "codeROME": rome,
+        "commune": prof.location.center.insee,
+        "distance": prof.location.radius_km,
         "publieeDepuis": PUBLIEE_DEPUIS,
         "sort": 1,  # date de publication décroissante
         # Filtre serveur : CDI uniquement (postes permanents) — écarte CDD, MIS (intérim),
@@ -68,7 +69,7 @@ def collect(settings: Settings) -> list[RawJob]:
             if not _has_more(resp):
                 break
 
-    logger.info(f"france_travail : {len(offers)} offres (ROME {ROME_CODES}, {DISTANCE_KM} km)")
+    logger.info(f"france_travail : {len(offers)} offres (ROME {rome}, {prof.location.radius_km} km)")
     return list(offers.values())
 
 

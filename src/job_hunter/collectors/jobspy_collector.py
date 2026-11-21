@@ -11,19 +11,11 @@ from typing import Any
 from loguru import logger
 
 from job_hunter.models import RawJob, Source
+from job_hunter.profile import get_profile
 
-QUERIES: list[tuple[str, str]] = [
-    ("Service Delivery Manager", "Nantes, France"),
-    ("Chef de projet IT", "Nantes, France"),
-    ("Chef de projet digital", "Nantes, France"),
-    ("PMO", "Nantes, France"),
-    ("Product Manager", "Nantes, France"),
-    ("Data Engineer", "Nantes, France"),
-    # Élargissement 23/09/2026. « Service Manager » / « Delivery Manager » retirés le même
-    # jour : sur Indeed = managers retail/restauration (run #90). Couverts par les alertes mail.
-    ("Responsable production informatique", "Nantes, France"),
-    ("Responsable opérationnel de comptes", "Nantes, France"),  # ROC = SDM côté ESN (08/10/2026)
-]
+# Requêtes : profile.yaml › search.jobspy_queries, autour de location.center.
+# Retirés le 23/09/2026 (exemple SDM) : « Service Manager » / « Delivery Manager » = managers
+# retail/restauration sur Indeed. Préférer des intitulés non ambigus.
 
 # Glassdoor retiré le 04/07/2026 : HTTP 400 "location not parsed" systématique côté JobSpy.
 # Réactivation = le remettre ici (mapping SITE_TO_SOURCE conservé).
@@ -48,7 +40,9 @@ def collect(include_linkedin: bool = False) -> list[RawJob]:
     sites = [*SITES_DEFAULT, *(["linkedin"] if include_linkedin else [])]
     jobs: dict[str, RawJob] = {}  # clé = job_url
 
-    for query, location in QUERIES:
+    prof = get_profile()
+    location = f"{prof.location.center.city}, France"
+    for query in prof.search.jobspy_queries:
         for site in sites:
             rows = _scrape_with_retry(site, query, location)
             new = 0
@@ -79,7 +73,7 @@ def _scrape_with_retry(site: str, query: str, location: str) -> list[dict[str, A
         "verbose": 0,  # logs JobSpy silencieux, les nôtres suffisent
     }
     if site == "google":
-        kwargs["google_search_term"] = f"{query} jobs near Nantes France since yesterday"
+        kwargs["google_search_term"] = f"{query} jobs near {location} since yesterday"
 
     for attempt in range(1, len(RETRY_DELAYS) + 2):
         try:

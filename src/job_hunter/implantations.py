@@ -1,4 +1,4 @@
-"""Veille implantations : nouveaux établissements secondaires en Loire-Atlantique
+"""Veille implantations : nouveaux établissements secondaires dans un département
 d'entreprises déjà significatives, via l'API Sirene (INSEE).
 
 Requête volontairement large côté API (département + date de création + non-siège),
@@ -34,7 +34,7 @@ class ImplantationConfig:
     tranches: frozenset[str]
     categories: frozenset[str]
     naf_prefixes: dict[str, str]
-    nantes_xy: tuple[float, float]
+    centre_xy: tuple[float, float]
 
 
 @dataclass
@@ -50,7 +50,7 @@ class Implantation:
     secteur: str
     effectif_groupe: str
     categorie: str
-    km_nantes: int | None
+    km_centre: int | None
 
     @property
     def url(self) -> str:
@@ -64,7 +64,7 @@ def load_config(path: Path) -> ImplantationConfig:
         tranches=frozenset(raw["tranches_effectif_min"]),
         categories=frozenset(raw.get("categories_entreprise", [])),
         naf_prefixes={str(k): v for k, v in raw["naf_prefixes"].items()},
-        nantes_xy=tuple(raw["nantes_lambert93"]),
+        centre_xy=tuple(raw["centre_lambert93"]),
     )
 
 
@@ -166,7 +166,7 @@ def select(etabs: list[dict], cfg: ImplantationConfig) -> list[Implantation]:
                 secteur=naf[1],
                 effectif_groupe=TRANCHES_LABELS.get(tranche, "NC"),
                 categorie=categorie,
-                km_nantes=_km(adr, cfg.nantes_xy),
+                km_centre=_km(adr, cfg.centre_xy),
             )
         )
     kept.sort(key=lambda i: i.date_creation, reverse=True)

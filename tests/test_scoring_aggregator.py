@@ -1,12 +1,11 @@
 """Agrégateur + soft skills + seuils (fichier ajouté vs brief, signalé au STOP Phase 3)."""
 import pytest
 
-from job_hunter.normalizer import normalize
+from job_hunter.profile import get_profile
 from job_hunter.scoring import aggregator
 from job_hunter.scoring.soft_skills import score_soft_skills
-from job_hunter.scoring.title_match import DEFAULT_TARGET_TITLES
 
-TARGETS = [normalize(t) for t in DEFAULT_TARGET_TITLES]
+TARGETS = get_profile().target_names()
 
 
 def test_soft_skills_weights():
