@@ -42,7 +42,6 @@ class Settings(BaseSettings):
     service_account_path: Path = _REPO_ROOT / "secrets" / "service_account.json"
     employers_yaml: Path = _REPO_ROOT / "data" / "employers.yaml"
     target_titles_yaml: Path = _REPO_ROOT / "data" / "target_titles.yaml"
-    apec_feeds_yaml: Path = _REPO_ROOT / "data" / "apec_feeds.yaml"
     implantations_yaml: Path = _REPO_ROOT / "data" / "implantations.yaml"
 
     # Veille implantations : fenêtre glissante (Sirene enregistre avec retard)
