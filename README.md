@@ -48,7 +48,8 @@ Rien à configurer : le RSS APEC n'existe plus (07/2026). Le collecteur interrog
 JSON publique du site (`rechercheOffre`) avec des mots-clés définis dans
 `collectors/apec_rss_collector.py` (`KEYWORDS`), puis filtre sur 44/49/85/35.
 ⚠️ APEC est derrière DataDome : depuis l'IP de GitHub Actions les requêtes peuvent
-être rejetées en **403** (source à 0 → run en échec, cf. « Comportement »).
+être rejetées en **403**. Panne **non bloquante** : signalée (log + onglet Sources NOK)
+sans faire échouer le run.
 
 ### 5. Alertes mail (LinkedIn, Hellowork, Indeed)
 
@@ -97,7 +98,8 @@ passent plus les filtres → archivées, motif en col. M), purgé (« Nouvelle �
 
 Les offres nouvelles ne sont marquées vues qu'après écriture Sheet réussie.
 
-**Run volontairement en échec** si une source lève une erreur ou remonte 0 offre :
+**Run volontairement en échec** si une source lève une erreur ou remonte 0 offre
+(sauf sources listées dans `NON_BLOCKING_SOURCES`, aujourd'hui `apec`) :
 GitHub notifie par mail, les offres des autres sources sont déjà écrites et la DB
 dédup est quand même commitée.
 

@@ -240,9 +240,9 @@ def run(
     db.close()
 
     report(len(all_jobs), dups, len(new_scored), retained, threshold, s.min_score_tier1, appended, dry_run, alerts)
-    if alerts:
+    if _blocking_alerts(alerts):
         # Run en échec APRÈS écriture Sheet : GitHub notifie (mail), les offres des
-        # sources saines sont déjà livrées.
+        # sources saines sont déjà livrées. Pannes des sources non bloquantes : log seul.
         raise typer.Exit(code=1)
 
 
@@ -308,6 +308,12 @@ def sync_statuts(
         print(f"{u['range']:<16} ← {u['values'][0][0]}")
     if not dry_run:
         writer.apply_status_updates(updates, watermark)
+
+
+def _blocking_alerts(alerts: list[str]) -> list[str]:
+    """Alertes qui font échouer le run : tout sauf les pannes de NON_BLOCKING_SOURCES."""
+    prefixes = tuple(f"{src} :" for src in base.NON_BLOCKING_SOURCES)
+    return [a for a in alerts if not a.startswith(prefixes)]
 
 
 def _silent_zero_sources(all_jobs: list[RawJob], alerts: list[str], selected: list[str]) -> list[str]:

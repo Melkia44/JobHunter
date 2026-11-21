@@ -14,6 +14,11 @@ CollectFn = Callable[..., list[RawJob]]
 # Noms de sources acceptés par `run --sources` (ordre = ordre d'exécution)
 SOURCES = ("jobspy", "france_travail", "apec", "careers_sites", "email_alerts")
 
+# Sources dont la panne est signalée (log + onglet Sources NOK) sans faire échouer le run.
+# APEC : DataDome renvoie 403 depuis l'IP GitHub Actions → échec quotidien (18-25/10/2026),
+# qui a fini par faire désactiver le workflow et masquer les autres sources.
+NON_BLOCKING_SOURCES = ("apec",)
+
 # --- Filtre contrat : on ne garde que le CDI (postes permanents) -------------
 # Le champ contract_type n'est ni fiable ni homogène entre sources (codes FT, libellés
 # Cegid, "permanent" SmartRecruiters, job_type jobspy…) → on croise le champ contrat ET
